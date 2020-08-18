@@ -157,7 +157,7 @@ class DeepMarkovModel(pl.LightningModule):
         }, on_step=False, on_epoch=True)
 
         if self.current_epoch % 5 == 0:
-            self.save_image(x[0], x_recon[0])
+            self.log_image(x[0], x_recon[0])
 
         return result
 
@@ -178,14 +178,15 @@ class DeepMarkovModel(pl.LightningModule):
                                 weight_decay=self.config['weight_decay']
                                 )
 
-    def save_image(self, x, x_recon):
+    def log_image(self, x, x_recon):
         x = x.cpu().detach().numpy()
         x_recon = x_recon.cpu().detach().numpy()
         fig, ax = plt.subplots(2, 1, sharex=True, figsize=(10, 20))
         ax[0].imshow(x.T, origin='lower')
         ax[1].imshow(x_recon.T, origin='lower')
-        path = '/'.join(['reconstructions', str(self.current_epoch) + '.jpg'])
-        fig.savefig(path)
+        # path = '/'.join(['reconstructions', str(self.current_epoch) + '.jpg'])
+        # fig.savefig(path)
+        self.experiment.add_figure('reconstruction', fig)
         plt.close()
 
 
