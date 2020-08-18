@@ -186,7 +186,7 @@ class DeepMarkovModel(pl.LightningModule):
         ax[1].imshow(x_recon.T, origin='lower')
         # path = '/'.join(['reconstructions', str(self.current_epoch) + '.jpg'])
         # fig.savefig(path)
-        self.experiment.add_figure('reconstruction', fig)
+        self.logger.experiment.add_figure('reconstruction', fig)
         plt.close()
 
 
