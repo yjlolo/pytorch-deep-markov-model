@@ -143,6 +143,9 @@ class DeepMarkovModel(pl.LightningModule):
 
         return result
 
+    def on_after_backward(self):
+        self.log_parameter(log_grad=True)
+
     def validation_step(self, batch, batch_idx):
         x, x_reversed, x_mask, x_seq_lengths = batch
         nll_loss, kl_loss, x_recon = self(x, x_reversed, x_mask, x_seq_lengths)
@@ -189,6 +192,14 @@ class DeepMarkovModel(pl.LightningModule):
         self.logger.experiment.add_figure('reconstruction', fig)
         plt.close()
 
+    def log_parameter(self, log_grad=True, debug=True):
+        for name, p in self.named_parameters():
+            self.logger.experiment.add_histogram(name + '/weight', p, bins='auto')
+            if log_grad and p.requires_grad:
+                if p.grad is not None:
+                    self.logger.experiment.add_histogram(name + '/grad', p.grad, bins='auto')
+                else:
+                    self.logger.experiment.add_histogram(name + '/grad_none', 999, bins='auto')
 
 def main(config):
     mini_batch_size = config['batch_size']
@@ -276,7 +287,7 @@ if __name__ == '__main__':
         'min_annealing_factor': 0.0
     }
     trainer = pl.Trainer(gpus=1,
-                         track_grad_norm=2,
+                         # track_grad_norm=2,
                          gradient_clip_val=config['clip_norm'],
                          logger=tb_logger,
                          fast_dev_run=False)
