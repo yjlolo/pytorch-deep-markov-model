@@ -1,0 +1,62 @@
+{
+    "name": "DMM_rnn",
+    "n_gpu": 1,
+
+    "arch": {
+        "type": "DeepMarkovModel",
+        "args": {
+            "input_dim": 88,
+            "z_dim": 100,
+            "emission_dim": 100,
+            "transition_dim": 200,
+            "rnn_dim": 600
+        }
+    },
+    "data_loader_train": {
+        "type": "PolyMusicDataLoader",
+        "args":{
+            "batch_size": 20,
+            "data_dir": "jsb",
+            "split": "train",
+            "shuffle": true,
+            "num_workers": 1
+        }
+    },
+    "data_loader_valid": {
+        "type": "PolyMusicDataLoader",
+        "args":{
+            "batch_size": 20,
+            "data_dir": "jsb",
+            "split": "valid",
+            "shuffle": false,
+            "num_workers": 1
+        }
+    },
+    "optimizer": {
+        "type": "Adam",
+        "args":{
+            "lr": 0.0008,
+            "weight_decay": 2.0,
+            "amsgrad": true,
+            "betas": [0.96, 0.999]
+        }
+    },
+    "loss": "dmm_loss",
+    "trainer": {
+        "epochs": 5000,
+
+        "save_dir": "saved/",
+        "save_period": 500,
+        "verbosity": 2,
+        
+        "monitor": "min val_loss",
+        "early_stop": 50,
+
+        "tensorboard": true,
+        "log_on_epoch": true,
+
+        "min_anneal_factor": 0.0,
+        "anneal_update": 5000
+    }
+}
+
