@@ -26,14 +26,24 @@ def dmm_loss(kl_annealing_factor=1, mask=None, **kwargs):
     mu2, logvar2 = kwargs['mu2'], kwargs['logvar2']
     x, x_hat = kwargs['x'], kwargs['x_hat']
 
-    kl_l = kl_div(mu1, logvar1, mu2, logvar2).sum(dim=-1)
-    nll_l = nll_loss(x_hat, x).sum(dim=-1)
+    kl_raw = kl_div(mu1, logvar1, mu2, logvar2)  # .sum(dim=-1)
+    nll_raw = nll_loss(x_hat, x)  # .sum(dim=-1)
+    # feature-dimension reduced
+    kl_fr = kl_raw.sum(dim=-1)  
+    nll_fr = nll_raw.sum(dim=-1)
+    # masking
     if mask is not None:
-        kl_l = mask * kl_l
-        nll_l = mask * nll_l
+        kl_m = mask * kl_fr
+        nll_m = mask * nll_fr
 
     batch_size = x.size(0)
-    nll_l = nll_l.sum(dim=-1).sum(dim=0).div(batch_size)
-    kl_l = kl_l.sum(dim=-1).sum(dim=0).div(batch_size)
+    # time- and batch- aggregated
+    kl_aggr = kl_m.sum(dim=-1).sum(dim=0).div(batch_size)
+    nll_aggr = nll_m.sum(dim=-1).sum(dim=0).div(batch_size)
+    loss = kl_aggr * kl_annealing_factor + nll_aggr
 
-    return nll_l, kl_l, nll_l + kl_l * kl_annealing_factor
+    return kl_raw, nll_raw, \
+        kl_fr, nll_fr, \
+        kl_m, nll_m, \
+        kl_aggr, nll_aggr, \
+        loss

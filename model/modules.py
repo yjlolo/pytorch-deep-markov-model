@@ -35,12 +35,13 @@ class Emitter(nn.Module):
         self.lin2 = nn.Linear(emission_dim, emission_dim)
         self.lin3 = nn.Linear(emission_dim, input_dim)
         self.act = nn.ReLU()
-        self.out = nn.Sigmoid()
+        # self.out = nn.Sigmoid()
 
     def forward(self, z_t):
         h1 = self.act(self.lin1(z_t))
         h2 = self.act(self.lin2(h1))
-        return self.out(self.lin3(h2))
+        # return self.out(self.lin3(h2))
+        return self.lin3(h2)
 
 
 class Transition(nn.Module):

@@ -56,7 +56,7 @@ class Trainer(BaseTrainer):
         # ----------------
 
         for batch_idx, batch in enumerate(self.data_loader):
-            x, x_reversed, x_mask, x_seq_lengths = batch
+            x, x_reversed_unpack, x_reversed, x_mask, x_seq_lengths = batch
             x = x.to(self.device)
             x_reversed = x_reversed.to(self.device)
             x_mask = x_mask.to(self.device)
@@ -69,10 +69,11 @@ class Trainer(BaseTrainer):
                 determine_annealing_factor(self.config['trainer']['min_anneal_factor'],
                                            self.config['trainer']['anneal_update'],
                                            epoch - 1, self.len_epoch, batch_idx)
-            nll_l, kl_l, loss = self.criterion(kl_annealing_factor, x_mask,
-                                               x=x, x_hat=x_recon,
-                                               mu1=mu_q_seq, logvar1=logvar_q_seq,
-                                               mu2=mu_p_seq, logvar2=logvar_p_seq)
+            kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
+                self.criterion(kl_annealing_factor, x_mask,
+                               x=x, x_hat=x_recon,
+                               mu1=mu_q_seq, logvar1=logvar_q_seq,
+                               mu2=mu_p_seq, logvar2=logvar_p_seq)
             loss.backward()
 
             # ------------
@@ -85,7 +86,7 @@ class Trainer(BaseTrainer):
 
             self.optimizer.step()
 
-            for l_i, l_i_val in zip(self.log_loss, [loss, nll_l, kl_l]):
+            for l_i, l_i_val in zip(self.log_loss, [loss, nll_aggr, kl_aggr]):
                 self.train_metrics.update(l_i, l_i_val.item())
             if self.metric_ftns is not None:
                 for met in self.metric_ftns:
@@ -103,7 +104,7 @@ class Trainer(BaseTrainer):
             if self.writer is not None:
                 if not self.config['trainer']['log_on_epoch']:
                     self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
-                    for l_i, l_i_val in zip(self.log_loss, [loss, nll_l, kl_l]):
+                    for l_i, l_i_val in zip(self.log_loss, [loss, nll_aggr, kl_aggr]):
                         self.train_metrics.write_to_logger(l_i, l_i_val.item())
                     if self.metric_ftns is not None:
                         for met in self.metric_ftns:
@@ -123,8 +124,15 @@ class Trainer(BaseTrainer):
                 if self.metric_ftns is not None:
                     self.train_metrics.write_to_logger(met.__name__)
             for name, p in dict_grad.items():
-                self.writer.add_histogram(name + '/grad', p.mean(), bins='auto')
+                self.writer.add_histogram(name + '/grad', p, bins='auto')
         # ---------------------------------------------------
+        fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
+        debug_fig = create_debug_figure(x, x_reversed_unpack, x_mask)
+        debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
+        self.writer.set_step(epoch)
+        self.writer.add_figure('reconstruction', fig)
+        self.writer.add_figure('debug', debug_fig)
+        self.writer.add_figure('debug_loss', debug_fig_loss)
 
         log = self.train_metrics.result()
 
@@ -147,7 +155,7 @@ class Trainer(BaseTrainer):
         self.valid_metrics.reset()
         with torch.no_grad():
             for batch_idx, batch in enumerate(self.valid_data_loader):
-                x, x_reversed, x_mask, x_seq_lengths = batch
+                x, x_reversed_unpack, x_reversed, x_mask, x_seq_lengths = batch
                 x = x.to(self.device)
                 x_reversed = x_reversed.to(self.device)
                 x_mask = x_mask.to(self.device)
@@ -156,12 +164,13 @@ class Trainer(BaseTrainer):
                 self.optimizer.zero_grad()
                 x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
                     self.model(x, x_reversed, x_seq_lengths)
-                nll_l, kl_l, loss = self.criterion(1, x_mask,
-                                                   x=x, x_hat=x_recon,
-                                                   mu1=mu_q_seq, logvar1=logvar_q_seq,
-                                                   mu2=mu_p_seq, logvar2=logvar_p_seq)
+                kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
+                    self.criterion(1, x_mask,
+                                   x=x, x_hat=x_recon,
+                                   mu1=mu_q_seq, logvar1=logvar_q_seq,
+                                   mu2=mu_p_seq, logvar2=logvar_p_seq)
 
-                for l_i, l_i_val in zip(self.log_loss, [loss, nll_l, kl_l]):
+                for l_i, l_i_val in zip(self.log_loss, [loss, nll_aggr, kl_aggr]):
                     self.valid_metrics.update(l_i, l_i_val.item())
                 if self.metric_ftns is not None:
                     for met in self.metric_ftns:
@@ -172,7 +181,7 @@ class Trainer(BaseTrainer):
                 if self.writer is not None:
                     if not self.config['trainer']['log_on_epoch']:
                         self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                        for l_i, l_i_val in zip(self.log_loss, [loss, nll_l, kl_l]):
+                        for l_i, l_i_val in zip(self.log_loss, [loss, nll_aggr, kl_aggr]):
                             self.valid_metrics.write_to_logger(l_i, l_i_val.item())
                         if self.metric_ftns is not None:
                             for met in self.metric_ftns:
@@ -183,15 +192,22 @@ class Trainer(BaseTrainer):
         # add flexibility to log either per step or per epoch
         if self.writer is not None:
             if self.config['trainer']['log_on_epoch']:
-                self.writer.set_step(epoch)
+                self.writer.set_step(epoch, 'valid')
                 for l_i in self.log_loss:
                     self.valid_metrics.write_to_logger(l_i)
                 if self.metric_ftns is not None:
-                    self.valid_metrics.write_to_logger(met.__name__)
+                    for met in self.metric_ftns:
+                        self.valid_metrics.write_to_logger(met.__name__)
         # ---------------------------------------------------
 
-        fig = create_reconstruction_figure(x[0], x_recon[0])
+        fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
+        debug_fig = create_debug_figure(x, x_reversed_unpack, x_mask)
+        debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
+        self.writer.set_step(epoch, 'valid')
         self.writer.add_figure('reconstruction', fig)
+        self.writer.add_figure('debug', debug_fig)
+        self.writer.add_figure('debug_loss', debug_fig_loss)
+
         # add histogram of model parameters to the tensorboard
         for name, p in self.model.named_parameters():
             self.writer.add_histogram(name, p, bins='auto')
@@ -231,3 +247,49 @@ def create_reconstruction_figure(x, x_recon):
     ax[0].imshow(x.T, origin='lower')
     ax[1].imshow(x_recon.T, origin='lower')
     return fig
+
+
+def create_debug_figure(x, x_reversed_unpack, x_mask, sample=True):
+    plt.close()
+    if sample:
+        idx = np.random.choice(x.shape[0], 1)[0]
+    else:
+        idx = 0
+    x = x[idx].cpu().detach().numpy()
+    x_reversed_unpack = x_reversed_unpack[idx].cpu().detach().numpy()
+    x_mask = x_mask[idx].cpu().detach().numpy()
+    fig, ax = plt.subplots(3, 1, sharex=True, figsize=(10, 30))
+    ax[0].imshow(x.T, origin='lower')
+    ax[1].imshow(x_reversed_unpack.T, origin='lower')
+    ax[2].imshow(np.tile(x_mask, (x.shape[0], 1)), origin='lower')
+    return fig
+
+
+def create_debug_loss_figure(kl_raw, nll_raw,
+                             kl_fr, nll_fr,
+                             kl_m, nll_m,
+                             mask, sample=True):
+    plt.close()
+    if sample:
+        idx = np.random.choice(kl_raw.shape[0], 1)[0]
+    else:
+        idx = 0
+    mask = tensor2np(mask[idx])
+    kl_raw, nll_raw = tensor2np(kl_raw[idx]), tensor2np(nll_raw[idx])  # (t, f)
+    kl_fr, nll_fr = tensor2np(kl_fr[idx]), tensor2np(nll_fr[idx])  # (t, )
+    kl_m, nll_m = tensor2np(kl_m[idx]), tensor2np(nll_m[idx])  # (t, )
+    # kl_aggr, nll_aggr = tensor2np(kl_aggr[idx]), tensor2np(nll_aggr[idx])  # ()
+    fig, ax = plt.subplots(4, 2, sharex=True, figsize=(20, 40))
+    ax[0][0].imshow(kl_raw.T, origin='lower')
+    ax[1][0].plot(kl_fr)
+    ax[2][0].plot(kl_m)
+    ax[3][0].plot(mask)
+    ax[0][1].imshow(nll_raw.T, origin='lower')
+    ax[1][1].plot(nll_fr)
+    ax[2][1].plot(nll_m)
+    ax[3][1].plot(mask)
+    return fig
+
+
+def tensor2np(t):
+    return t.cpu().detach().numpy()
