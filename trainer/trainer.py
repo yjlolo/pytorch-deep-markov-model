@@ -79,8 +79,8 @@ class Trainer(BaseTrainer):
             # ------------
             # accumulate gradients that are to be logged later after epoch ends
             for name, p in self.model.named_parameters():
-                if p.requires_grad:
-                    val = 0 if p.grad is None else p.grad.mean()
+                if p.requires_grad and 'bias' not in name:
+                    val = 0 if p.grad is None else p.grad.abs().mean()
                     dict_grad[name][batch_idx] = val
             # ------------
 
@@ -126,13 +126,14 @@ class Trainer(BaseTrainer):
             for name, p in dict_grad.items():
                 self.writer.add_histogram(name + '/grad', p, bins='auto')
         # ---------------------------------------------------
-        fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
-        debug_fig = create_debug_figure(x, x_reversed_unpack, x_mask)
-        debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
-        self.writer.set_step(epoch)
-        self.writer.add_figure('reconstruction', fig)
-        self.writer.add_figure('debug', debug_fig)
-        self.writer.add_figure('debug_loss', debug_fig_loss)
+        if epoch % 10 == 0:
+            fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
+            # debug_fig = create_debug_figure(x, x_reversed_unpack, x_mask)
+            debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
+            self.writer.set_step(epoch)
+            self.writer.add_figure('reconstruction', fig)
+            # self.writer.add_figure('debug', debug_fig)
+            self.writer.add_figure('debug_loss', debug_fig_loss)
 
         log = self.train_metrics.result()
 
@@ -200,13 +201,14 @@ class Trainer(BaseTrainer):
                         self.valid_metrics.write_to_logger(met.__name__)
         # ---------------------------------------------------
 
-        fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
-        debug_fig = create_debug_figure(x, x_reversed_unpack, x_mask)
-        debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
-        self.writer.set_step(epoch, 'valid')
-        self.writer.add_figure('reconstruction', fig)
-        self.writer.add_figure('debug', debug_fig)
-        self.writer.add_figure('debug_loss', debug_fig_loss)
+        if epoch % 10 == 0:
+            fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
+            # debug_fig = create_debug_figure(x, x_reversed_unpack, x_mask)
+            debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
+            self.writer.set_step(epoch, 'valid')
+            self.writer.add_figure('reconstruction', fig)
+            # self.writer.add_figure('debug', debug_fig)
+            self.writer.add_figure('debug_loss', debug_fig_loss)
 
         # add histogram of model parameters to the tensorboard
         for name, p in self.model.named_parameters():

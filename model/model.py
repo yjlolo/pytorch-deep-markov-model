@@ -13,7 +13,8 @@ class DeepMarkovModel(BaseModel):
                  z_dim,
                  emission_dim,
                  transition_dim,
-                 rnn_dim):
+                 rnn_dim,
+                 rnn_type):
         super().__init__()
         # specify parameters from `config`
         # self.config = config
@@ -25,6 +26,7 @@ class DeepMarkovModel(BaseModel):
         self.emission_dim = emission_dim
         self.transition_dim = transition_dim
         self.rnn_dim = rnn_dim
+        self.rnn_type = rnn_type
         # self.n_mini_batch = len(self.train_dataloader())
 
         # instantiate components of DMM
@@ -36,7 +38,8 @@ class DeepMarkovModel(BaseModel):
         self.combiner = Combiner(z_dim, rnn_dim)
         self.encoder = RnnEncoder(input_dim, rnn_dim,
                                   n_layer=1, drop_rate=0.0,
-                                  bd=False, nonlin='relu')
+                                  bd=False, nonlin='relu',
+                                  rnn_type=rnn_type)
 
         # initialize hidden states
         self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training

@@ -9,7 +9,8 @@
             "z_dim": 100,
             "emission_dim": 100,
             "transition_dim": 200,
-            "rnn_dim": 600
+            "rnn_dim": 600,
+            "rnn_type": "rnn"
         }
     },
     "data_loader_train": {
