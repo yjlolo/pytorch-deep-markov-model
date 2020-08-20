@@ -184,7 +184,7 @@ class RnnEncoder(nn.Module):
         RNN hidden states at every time-step
     """
     def __init__(self, input_dim, rnn_dim, n_layer=1, drop_rate=0.0, bd=False,
-                 nonlin='relu'):
+                 nonlin='relu', rnn_type='rnn'):
         super().__init__()
         self.n_direction = 1 if not bd else 2
         self.input_dim = input_dim
@@ -194,10 +194,21 @@ class RnnEncoder(nn.Module):
         self.bd = bd
         self.nonlin = nonlin
 
-        self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim,
-                          nonlinearity=nonlin, batch_first=True,
-                          bidirectional=bd, num_layers=n_layer,
-                          dropout=drop_rate)
+        if not isinstance(rnn_type, str):
+            raise ValueError("`rnn_type` should be type str.")
+        if rnn_type == 'rnn':
+            self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim,
+                              nonlinearity=nonlin, batch_first=True,
+                              bidirectional=bd, num_layers=n_layer,
+                              dropout=drop_rate)
+        elif rnn_type == 'gru':
+            self.rnn = nn.GRU(input_size=input_dim, hidden_size=rnn_dim,
+                              batch_first=True,
+                              bidirectional=bd, num_layers=n_layer,
+                              dropout=drop_rate)
+        else:
+            raise ValueError("`rnn_type` must be instead ['rnn', 'gru'] %s"
+                             % rnn_type)
 
     def calculate_effect_dim(self):
         return self.rnn_dim * self.n_direction

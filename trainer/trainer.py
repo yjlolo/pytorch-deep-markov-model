@@ -79,8 +79,8 @@ class Trainer(BaseTrainer):
             # ------------
             # accumulate gradients that are to be logged later after epoch ends
             for name, p in self.model.named_parameters():
-                if p.requires_grad:
-                    val = 0 if p.grad is None else p.grad.mean()
+                if p.requires_grad and 'bias' not in name:
+                    val = 0 if p.grad is None else p.grad.abs().mean()
                     dict_grad[name][batch_idx] = val
             # ------------
 
