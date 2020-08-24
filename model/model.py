@@ -15,7 +15,8 @@ class DeepMarkovModel(BaseModel):
                  transition_dim,
                  rnn_dim,
                  rnn_type,
-                 orthogonal_init):
+                 orthogonal_init,
+                 sample=True):
         super().__init__()
         # specify parameters from `config`
         # self.config = config
@@ -29,6 +30,7 @@ class DeepMarkovModel(BaseModel):
         self.rnn_dim = rnn_dim
         self.rnn_type = rnn_type
         self.orthogonal_init = orthogonal_init
+        self.sample = sample
         # self.n_mini_batch = len(self.train_dataloader())
 
         # instantiate components of DMM
@@ -53,6 +55,8 @@ class DeepMarkovModel(BaseModel):
         #     self.cuda()
 
     def reparameterization(self, mu, logvar):
+        if not self.sample:
+            return mu
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std

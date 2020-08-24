@@ -11,7 +11,8 @@
             "transition_dim": 200,
             "rnn_dim": 600,
             "rnn_type": "gru",
-            "orthogonal_init": true
+            "orthogonal_init": true,
+            "sample": false
         }
     },
     "data_loader_train": {
