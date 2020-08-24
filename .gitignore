@@ -1,3 +1,11 @@
+<<<<<<< HEAD
+__pycache__/
+.data/
+.vscode/
+lightning_logs/
+reconstructions/
+*.ipynb
+=======
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -112,3 +120,4 @@ datasets/
 __MACOSX/
 
 .data/
+>>>>>>> 318f18692763ee44d83762b30b53d24835e7adcf

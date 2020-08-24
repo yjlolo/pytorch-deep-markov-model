@@ -52,7 +52,8 @@ class Trainer(BaseTrainer):
         # add logging grad
         dict_grad = {}
         for name, p in self.model.named_parameters():
-            dict_grad[name] = np.zeros(self.len_epoch)
+            if p.requires_grad and 'bias' not in name:
+                dict_grad[name] = np.zeros(self.len_epoch)
         # ----------------
 
         for batch_idx, batch in enumerate(self.data_loader):
@@ -123,8 +124,9 @@ class Trainer(BaseTrainer):
                     self.train_metrics.write_to_logger(l_i)
                 if self.metric_ftns is not None:
                     self.train_metrics.write_to_logger(met.__name__)
-            for name, p in dict_grad.items():
-                self.writer.add_histogram(name + '/grad', p, bins='auto')
+                for name, p in dict_grad.items():
+                    self.writer.add_histogram(name + '/grad', p, bins='auto')
+                self.writer.add_scalar('anneal_factor', kl_annealing_factor)
         # ---------------------------------------------------
         if epoch % 10 == 0:
             fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))

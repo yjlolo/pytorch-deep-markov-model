@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.init as weight_init
-from data_loader.seq_util import pad_and_reverse
+from util import reverse_sequence, pad_and_reverse
 
 """
 Generative modules
@@ -36,13 +35,12 @@ class Emitter(nn.Module):
         self.lin2 = nn.Linear(emission_dim, emission_dim)
         self.lin3 = nn.Linear(emission_dim, input_dim)
         self.act = nn.ReLU()
-        # self.out = nn.Sigmoid()
+        self.out = nn.Sigmoid()
 
     def forward(self, z_t):
         h1 = self.act(self.lin1(z_t))
         h2 = self.act(self.lin2(h1))
-        # return self.out(self.lin3(h2))
-        return self.lin3(h2)
+        return self.out(self.lin3(h2))
 
 
 class Transition(nn.Module):
@@ -98,7 +96,7 @@ class Transition(nn.Module):
         self.act = nn.ReLU()
 
     def init_z_0(self):
-        return nn.Parameter(torch.zeros(self.z_dim)), nn.Parameter(torch.zeros(self.z_dim))
+        return nn.Parameter(torch.zeros(self.z_dim))
 
     def forward(self, z_t_1):
         _mu = self.act(self.lin1p(z_t_1))
@@ -185,7 +183,7 @@ class RnnEncoder(nn.Module):
         RNN hidden states at every time-step
     """
     def __init__(self, input_dim, rnn_dim, n_layer=1, drop_rate=0.0, bd=False,
-                 nonlin='relu', rnn_type='rnn', orthogonal_init=False):
+                 nonlin='relu'):
         super().__init__()
         self.n_direction = 1 if not bd else 2
         self.input_dim = input_dim
@@ -195,29 +193,10 @@ class RnnEncoder(nn.Module):
         self.bd = bd
         self.nonlin = nonlin
 
-        if not isinstance(rnn_type, str):
-            raise ValueError("`rnn_type` should be type str.")
-        if rnn_type == 'rnn':
-            self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim,
-                              nonlinearity=nonlin, batch_first=True,
-                              bidirectional=bd, num_layers=n_layer,
-                              dropout=drop_rate)
-        elif rnn_type == 'gru':
-            self.rnn = nn.GRU(input_size=input_dim, hidden_size=rnn_dim,
-                              batch_first=True,
-                              bidirectional=bd, num_layers=n_layer,
-                              dropout=drop_rate)
-        else:
-            raise ValueError("`rnn_type` must be instead ['rnn', 'gru'] %s"
-                             % rnn_type)
-
-        if orthogonal_init:
-            self.init_weights()
-
-    def init_weights(self):
-        for w in self.rnn.parameters():
-            if w.dim() > 1:
-                weight_init.orthogonal_(w)
+        self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim,
+                          nonlinearity=nonlin, batch_first=True,
+                          bidirectional=bd, num_layers=n_layer,
+                          dropout=drop_rate)
 
     def calculate_effect_dim(self):
         return self.rnn_dim * self.n_direction
@@ -225,7 +204,7 @@ class RnnEncoder(nn.Module):
     def init_hidden(self):
         return nn.Parameter(
             torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim)
-        )
+            )
 
     def forward(self, x, h0, seq_lengths):
         """
