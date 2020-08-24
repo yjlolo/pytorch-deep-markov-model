@@ -92,7 +92,10 @@ class DeepMarkovModel(BaseModel):
             h0 = self.h_0.expand(self.encoder.n_layer * self.encoder.n_direction,
                                  batch_size, self.rnn_dim).contiguous()
         # h_t carries information from t to T
-        h_rnn = self.encoder(x_reversed, h0, x_seq_lengths)
+        if self.encoder.rnn_type == 'lstm':
+            h_rnn = self.encoder(x_reversed, h0, x_seq_lengths, c0=c0)
+        else:
+            h_rnn = self.encoder(x_reversed, h0, x_seq_lengths)
         z_q_0 = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
         mu_p_0 = self.mu_p_0.expand(batch_size, 1, self.mu_p_0.size(0))
         logvar_p_0 = self.logvar_p_0.expand(batch_size, 1, self.logvar_p_0.size(0))
