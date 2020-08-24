@@ -114,7 +114,7 @@ class Trainer(BaseTrainer):
                             self.train_metrics.write_to_logger(met.__name__, met(output, target))
             # ---------------------------------------------------
 
-            if batch_idx == self.len_epoch and self.overfit_single_batch:
+            if batch_idx == self.len_epoch or self.overfit_single_batch:
                 break
 
         # ---------------------------------------------------
