@@ -70,7 +70,7 @@ class Trainer(BaseTrainer):
                                            self.config['trainer']['anneal_update'],
                                            epoch - 1, self.len_epoch, batch_idx)
             kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
-                self.criterion(kl_annealing_factor, x_mask,
+                self.criterion(0, x_mask,
                                x=x, x_hat=x_recon,
                                mu1=mu_q_seq, logvar1=logvar_q_seq,
                                mu2=mu_p_seq, logvar2=logvar_p_seq)
