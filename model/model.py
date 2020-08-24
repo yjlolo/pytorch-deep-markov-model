@@ -14,7 +14,8 @@ class DeepMarkovModel(BaseModel):
                  emission_dim,
                  transition_dim,
                  rnn_dim,
-                 rnn_type):
+                 rnn_type,
+                 orthogonal_init):
         super().__init__()
         # specify parameters from `config`
         # self.config = config
@@ -27,6 +28,7 @@ class DeepMarkovModel(BaseModel):
         self.transition_dim = transition_dim
         self.rnn_dim = rnn_dim
         self.rnn_type = rnn_type
+        self.orthogonal_init = orthogonal_init
         # self.n_mini_batch = len(self.train_dataloader())
 
         # instantiate components of DMM
@@ -42,7 +44,8 @@ class DeepMarkovModel(BaseModel):
                                   rnn_type=rnn_type)
 
         # initialize hidden states
-        self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training
+        # self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training
+        self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0()  # this does not seem to be updated during training
         self.z_q_0 = self.combiner.init_z_q_0()
         self.h_0 = self.encoder.init_hidden()
 
@@ -77,6 +80,8 @@ class DeepMarkovModel(BaseModel):
         # h_t carries information from t to T
         h_rnn = self.encoder(x_reversed, h0, x_seq_lengths)
         z_q_0 = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
+        mu_p_0 = self.mu_p_0.expand(batch_size, 1, self.mu_p_0.size(0))
+        logvar_p_0 = self.logvar_p_0.expand(batch_size, 1, self.logvar_p_0.size(0))
         z_prev = z_q_0
 
         mu_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
@@ -91,11 +96,12 @@ class DeepMarkovModel(BaseModel):
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
             mu_q, logvar_q = self.combiner(z_prev, h_rnn[:, t, :])
+            zt_q = self.reparameterization(mu_q, logvar_q)
+            z_prev = zt_q
             # p(z_t | z_{t-1})
             mu_p, logvar_p = self.transition(z_prev)
-
-            zt_q = self.reparameterization(mu_q, logvar_q)
             zt_p = self.reparameterization(mu_p, logvar_p)
+
             xt_recon = self.emitter(zt_q).contiguous()
 
             mu_q_seq[:, t, :] = mu_q
@@ -105,7 +111,6 @@ class DeepMarkovModel(BaseModel):
             z_q_seq[:, t, :] = zt_q
             z_p_seq[:, t, :] = zt_p
             x_recon[:, t, :] = xt_recon
-            z_prev = zt_q
 
             # kl_seq[:, t] = self.kl_div(mu_q, logvar_q, mu_p, logvar_p)
             # nll_seq[:, t] = self.nll_loss(
@@ -119,6 +124,11 @@ class DeepMarkovModel(BaseModel):
         # nll_seq = nll_seq.sum(dim=-1)
         # kl_seq = kl_seq.sum(dim=-1)
         # return nll_seq.mean(), kl_seq.mean(), x_recon
+        mu_p_seq = torch.cat([mu_p_0, mu_p_seq[:, :-1, :]], dim=1)
+        logvar_p_seq = torch.cat([logvar_p_0, logvar_p_seq[:, :-1, :]], dim=1)
+        z_p_0 = self.reparameterization(mu_p_0, logvar_p_0)
+        z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
+
         return x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq
 
     # def determine_annealing_factor(self, epoch, batch_idx):

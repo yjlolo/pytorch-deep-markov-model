@@ -52,7 +52,8 @@ class Trainer(BaseTrainer):
         # add logging grad
         dict_grad = {}
         for name, p in self.model.named_parameters():
-            dict_grad[name] = np.zeros(self.len_epoch)
+            if p.requires_grad and 'bias' not in name:
+                dict_grad[name] = np.zeros(self.len_epoch)
         # ----------------
 
         for batch_idx, batch in enumerate(self.data_loader):
@@ -70,7 +71,7 @@ class Trainer(BaseTrainer):
                                            self.config['trainer']['anneal_update'],
                                            epoch - 1, self.len_epoch, batch_idx)
             kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
-                self.criterion(kl_annealing_factor, x_mask,
+                self.criterion(0, x_mask,
                                x=x, x_hat=x_recon,
                                mu1=mu_q_seq, logvar1=logvar_q_seq,
                                mu2=mu_p_seq, logvar2=logvar_p_seq)
@@ -123,8 +124,9 @@ class Trainer(BaseTrainer):
                     self.train_metrics.write_to_logger(l_i)
                 if self.metric_ftns is not None:
                     self.train_metrics.write_to_logger(met.__name__)
-            for name, p in dict_grad.items():
-                self.writer.add_histogram(name + '/grad', p, bins='auto')
+                for name, p in dict_grad.items():
+                    self.writer.add_histogram(name + '/grad', p, bins='auto')
+                self.writer.add_scalar('anneal_factor', kl_annealing_factor)
         # ---------------------------------------------------
         if epoch % 10 == 0:
             fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
