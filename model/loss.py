@@ -23,7 +23,7 @@ def nll_loss(x_hat, x):
     batch_size = x_hat.size(0)
     rec_loss = torch.zeros_like(x_hat)
     for t in range(T_max):
-        rec_loss[:, t, :] = loss_fn(x_hat[:, t, :].view(-1), x[:, t, :].contiguous().view(-1)) \
+        rec_loss[:, t, :] = loss_fn(x_hat[:, t, :].contiguous().view(-1), x[:, t, :].contiguous().view(-1)) \
             .view(batch_size, -1)
     # return nn.BCEWithLogitsLoss(reduction='none')(x_hat, x)
     return rec_loss
