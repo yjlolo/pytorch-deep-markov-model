@@ -15,7 +15,18 @@ def kl_div(mu1, logvar1, mu2=None, logvar2=None):
 
 
 def nll_loss(x_hat, x):
-    return nn.BCEWithLogitsLoss(reduction='none')(x_hat, x)
+    assert x_hat.dim() == x.dim() == 3
+    assert x_hat.size(1) == x.size(1)
+    assert x_hat.size(0) == x.size(0)
+    loss_fn = nn.BCEWithLogitsLoss(reduction='none')
+    T_max = x_hat.size(1)
+    batch_size = x_hat.size(0)
+    rec_loss = torch.zeros_like(x_hat)
+    for t in range(T_max):
+        rec_loss[:, t, :] = loss_fn(x_hat[:, t, :].view(-1), x[:, t, :].view(-1)) \
+            .view(batch_size, -1)
+    # return nn.BCEWithLogitsLoss(reduction='none')(x_hat, x)
+    return rec_loss
 
 
 def dmm_loss(kl_annealing_factor=1, mask=None, **kwargs):
@@ -29,7 +40,7 @@ def dmm_loss(kl_annealing_factor=1, mask=None, **kwargs):
     kl_raw = kl_div(mu1, logvar1, mu2, logvar2)  # .sum(dim=-1)
     nll_raw = nll_loss(x_hat, x)  # .sum(dim=-1)
     # feature-dimension reduced
-    kl_fr = kl_raw.sum(dim=-1)  
+    kl_fr = kl_raw.sum(dim=-1)
     nll_fr = nll_raw.sum(dim=-1)
     # masking
     if mask is not None:
