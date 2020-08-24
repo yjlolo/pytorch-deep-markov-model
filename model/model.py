@@ -19,6 +19,7 @@ class DeepMarkovModel(BaseModel):
                  gated_transition,
                  train_init,
                  mean_field=False,
+                 reverse_rnn_input=True,
                  sample=True):
         super().__init__()
         # specify parameters from `config`
@@ -36,6 +37,7 @@ class DeepMarkovModel(BaseModel):
         self.gated_transition = gated_transition
         self.train_init = train_init
         self.mean_field = mean_field
+        self.reverse_rnn_input = reverse_rnn_input
         self.sample = sample
         # self.n_mini_batch = len(self.train_dataloader())
 
@@ -49,7 +51,8 @@ class DeepMarkovModel(BaseModel):
         self.encoder = RnnEncoder(input_dim, rnn_dim,
                                   n_layer=1, drop_rate=0.0,
                                   bd=False, nonlin='relu',
-                                  rnn_type=rnn_type)
+                                  rnn_type=rnn_type,
+                                  reverse_input=reverse_rnn_input)
 
         # initialize hidden states
         # self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training
@@ -86,7 +89,7 @@ class DeepMarkovModel(BaseModel):
     #     return nn.BCEWithLogitsLoss(reduction='none')(x_hat, x)
 
     # def forward(self, x, x_reversed, x_mask, x_seq_lengths):
-    def forward(self, x, x_reversed, x_seq_lengths):
+    def forward(self, x, x_pack, x_reversed_pack, x_seq_lengths):
         T_max = x.size(1)
         batch_size = x.size(0)
         if self.encoder.rnn_type == 'lstm':
@@ -98,10 +101,14 @@ class DeepMarkovModel(BaseModel):
             h0 = self.h_0.expand(self.encoder.n_layer * self.encoder.n_direction,
                                  batch_size, self.rnn_dim).contiguous()
         # h_t carries information from t to T
-        if self.encoder.rnn_type == 'lstm':
-            h_rnn = self.encoder(x_reversed, h0, x_seq_lengths, c0=c0)
+        if self.encoder.reverse_input:
+            input = x_reversed_pack
         else:
-            h_rnn = self.encoder(x_reversed, h0, x_seq_lengths)
+            input = x_pack
+        if self.encoder.rnn_type == 'lstm':
+            h_rnn = self.encoder(input, h0, x_seq_lengths, c0=c0)
+        else:
+            h_rnn = self.encoder(input, h0, x_seq_lengths)
         z_q_0 = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
         mu_p_0 = self.mu_p_0.expand(batch_size, 1, self.mu_p_0.size(0))
         logvar_p_0 = self.logvar_p_0.expand(batch_size, 1, self.logvar_p_0.size(0))

@@ -192,7 +192,8 @@ class RnnEncoder(nn.Module):
         RNN hidden states at every time-step
     """
     def __init__(self, input_dim, rnn_dim, n_layer=1, drop_rate=0.0, bd=False,
-                 nonlin='relu', rnn_type='rnn', orthogonal_init=False):
+                 nonlin='relu', rnn_type='rnn', orthogonal_init=False,
+                 reverse_input=True):
         super().__init__()
         self.n_direction = 1 if not bd else 2
         self.input_dim = input_dim
@@ -201,6 +202,7 @@ class RnnEncoder(nn.Module):
         self.drop_rate = drop_rate
         self.bd = bd
         self.nonlin = nonlin
+        self.reverse_input = reverse_input
 
         if not isinstance(rnn_type, str):
             raise ValueError("`rnn_type` should be type str.")
@@ -256,6 +258,8 @@ class RnnEncoder(nn.Module):
             _h_rnn, _ = self.rnn(x, (h0, c0))
         else:
             _h_rnn, _ = self.rnn(x, h0)
-        h_rnn = pad_and_reverse(_h_rnn, seq_lengths)
-        # may have to reshape to (b, T_max, rnn_dim * n_direction)
+        if self.reverse_input:
+            h_rnn = pad_and_reverse(_h_rnn, seq_lengths)
+        else:
+            h_rnn, _ = nn.utils.rnn.pad_packed_sequence(_h_rnn, batch_first=True)
         return h_rnn

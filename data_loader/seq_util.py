@@ -156,5 +156,10 @@ def seq_collate_fn(batch):
         sorted_seq_lengths,
         batch_first=True
     )
+    mini_batch_pack = nn.utils.rnn.pack_padded_sequence(
+        mini_batch,
+        sorted_seq_lengths,
+        batch_first=True
+    )
 
-    return mini_batch, mini_batch_reversed, mini_batch_reversed_pack, mini_batch_mask, sorted_seq_lengths
+    return mini_batch, mini_batch_reversed, mini_batch_pack, mini_batch_reversed_pack, mini_batch_mask, sorted_seq_lengths

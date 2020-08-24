@@ -12,9 +12,10 @@
             "rnn_dim": 600,
             "rnn_type": "lstm",
             "orthogonal_init": true,
-	        "gated_transition": false,
+	    "gated_transition": false,
             "train_init": false,
             "mean_field": true,
+            "reverse_rnn_input": false,
             "sample": false
         }
     },
