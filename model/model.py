@@ -49,7 +49,11 @@ class DeepMarkovModel(BaseModel):
         # self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training
         self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0()  # this does not seem to be updated during training
         self.z_q_0 = self.combiner.init_z_q_0()
-        self.h_0 = self.encoder.init_hidden()
+        h_0 = self.encoder.init_hidden()
+        if self.encoder.rnn_type == 'lstm':
+            self.h_0, self.c_0 = h_0
+        else:
+            self.h_0 = h_0
 
         # if config['use_cuda']:
         #     self.cuda()
@@ -79,8 +83,14 @@ class DeepMarkovModel(BaseModel):
     def forward(self, x, x_reversed, x_seq_lengths):
         T_max = x.size(1)
         batch_size = x.size(0)
-        h0 = self.h_0.expand(self.encoder.n_layer * self.encoder.n_direction,
-                             batch_size, self.rnn_dim).contiguous()
+        if self.encoder.rnn_type == 'lstm':
+            h0 = self.h_0.expand(self.encoder.n_layer * self.encoder.n_direction,
+                                 batch_size, self.rnn_dim).contiguous()
+            c0 = self.c_0.expand(self.encoder.n_layer * self.encoder.n_direction,
+                                 batch_size, self.rnn_dim).contiguous()
+        else:
+            h0 = self.h_0.expand(self.encoder.n_layer * self.encoder.n_direction,
+                                 batch_size, self.rnn_dim).contiguous()
         # h_t carries information from t to T
         h_rnn = self.encoder(x_reversed, h0, x_seq_lengths)
         z_q_0 = self.z_q_0.expand(batch_size, self.z_q_0.size(0))

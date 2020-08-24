@@ -197,6 +197,7 @@ class RnnEncoder(nn.Module):
 
         if not isinstance(rnn_type, str):
             raise ValueError("`rnn_type` should be type str.")
+        self.rnn_type = rnn_type
         if rnn_type == 'rnn':
             self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim,
                               nonlinearity=nonlin, batch_first=True,
@@ -207,8 +208,13 @@ class RnnEncoder(nn.Module):
                               batch_first=True,
                               bidirectional=bd, num_layers=n_layer,
                               dropout=drop_rate)
+        elif rnn_type == 'lstm':
+            self.rnn = nn.LSTM(input_size=input_dim, hidden_size=rnn_dim,
+                               batch_first=True,
+                               bidirectional=bd, num_layers=n_layer,
+                               dropout=drop_rate)
         else:
-            raise ValueError("`rnn_type` must be instead ['rnn', 'gru'] %s"
+            raise ValueError("`rnn_type` must instead be ['rnn', 'gru', 'lstm'] %s"
                              % rnn_type)
 
         if orthogonal_init:
@@ -223,11 +229,15 @@ class RnnEncoder(nn.Module):
         return self.rnn_dim * self.n_direction
 
     def init_hidden(self):
-        return nn.Parameter(
-            torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim)
-        )
+        if self.rnn_type == 'lstm':
+            h0 = nn.Parameter(torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim))
+            c0 = nn.Parameter(torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim))
+            return h0, c0
+        else:
+            h0 = nn.Parameter(torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim))
+            return h0
 
-    def forward(self, x, h0, seq_lengths):
+    def forward(self, x, h0, seq_lengths, c0=None):
         """
         x: pytorch packed object
             input packed data; this can be obtained from
@@ -235,7 +245,10 @@ class RnnEncoder(nn.Module):
         h0: tensor (n_layer * n_direction, b, rnn_dim)
         seq_lengths: tensor (b, )
         """
-        _h_rnn, _ = self.rnn(x, h0)
+        if self.rnn_type == 'lstm':
+            _h_rnn, _ = self.rnn(x, (h0, c0))
+        else:
+            _h_rnn, _ = self.rnn(x, h0)
         h_rnn = pad_and_reverse(_h_rnn, seq_lengths)
         # may have to reshape to (b, T_max, rnn_dim * n_direction)
         return h_rnn
