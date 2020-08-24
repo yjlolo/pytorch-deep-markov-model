@@ -13,6 +13,7 @@
             "rnn_type": "gru",
             "orthogonal_init": true,
 	    "gated_transition": false,
+	    "train_init": false,
             "sample": false
         }
     },

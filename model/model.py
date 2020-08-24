@@ -17,6 +17,7 @@ class DeepMarkovModel(BaseModel):
                  rnn_type,
                  orthogonal_init,
                  gated_transition,
+                 train_init,
                  sample=True):
         super().__init__()
         # specify parameters from `config`
@@ -32,6 +33,7 @@ class DeepMarkovModel(BaseModel):
         self.rnn_type = rnn_type
         self.orthogonal_init = orthogonal_init
         self.gated_transition = gated_transition
+        self.train_init = train_init
         self.sample = sample
         # self.n_mini_batch = len(self.train_dataloader())
 
@@ -49,8 +51,8 @@ class DeepMarkovModel(BaseModel):
 
         # initialize hidden states
         # self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training
-        self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0()  # this does not seem to be updated during training
-        self.z_q_0 = self.combiner.init_z_q_0()
+        self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0(trainable=train_init)
+        self.z_q_0 = self.combiner.init_z_q_0(trainable=train_init)
         h_0 = self.encoder.init_hidden()
         if self.encoder.rnn_type == 'lstm':
             self.h_0, self.c_0 = h_0

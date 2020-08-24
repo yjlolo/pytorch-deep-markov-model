@@ -97,8 +97,9 @@ class Transition(nn.Module):
         self.act_weight = nn.Sigmoid()
         self.act = nn.ReLU()
 
-    def init_z_0(self):
-        return nn.Parameter(torch.zeros(self.z_dim)), nn.Parameter(torch.zeros(self.z_dim))
+    def init_z_0(self, trainable=True):
+        return nn.Parameter(torch.zeros(self.z_dim), requires_grad=trainable), \
+            nn.Parameter(torch.zeros(self.z_dim), requires_grad=trainable)
 
     def forward(self, z_t_1):
         _mu = self.act(self.lin1p(z_t_1))
@@ -147,8 +148,8 @@ class Combiner(nn.Module):
         self.lin_v = nn.Linear(rnn_dim, z_dim)
         self.act = nn.Tanh()
 
-    def init_z_q_0(self):
-        return nn.Parameter(torch.zeros(self.z_dim))
+    def init_z_q_0(self, trainable=True):
+        return nn.Parameter(torch.zeros(self.z_dim), requires_grad=trainable)
 
     def forward(self, z_t_1, h_rnn):
         """
@@ -228,13 +229,13 @@ class RnnEncoder(nn.Module):
     def calculate_effect_dim(self):
         return self.rnn_dim * self.n_direction
 
-    def init_hidden(self):
+    def init_hidden(self, trainable=True):
         if self.rnn_type == 'lstm':
-            h0 = nn.Parameter(torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim))
-            c0 = nn.Parameter(torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim))
+            h0 = nn.Parameter(torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim), requires_grad=trainable)
+            c0 = nn.Parameter(torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim), requires_grad=trainable)
             return h0, c0
         else:
-            h0 = nn.Parameter(torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim))
+            h0 = nn.Parameter(torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim), requires_grad=trainable)
             return h0
 
     def forward(self, x, h0, seq_lengths, c0=None):
