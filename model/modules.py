@@ -138,15 +138,18 @@ class Combiner(nn.Module):
     logvar: tensor (b, z_dim)
         Log-var that parameterizes the variational Gaussian distribution
     """
-    def __init__(self, z_dim, rnn_dim):
+    def __init__(self, z_dim, rnn_dim, mean_field=False):
         super().__init__()
         self.z_dim = z_dim
         self.rnn_dim = rnn_dim
+        self.mean_field = mean_field
 
-        self.lin1 = nn.Linear(z_dim, rnn_dim)
+        if not mean_field:
+            self.lin1 = nn.Linear(z_dim, rnn_dim)
+            self.act = nn.Tanh()
+
         self.lin2 = nn.Linear(rnn_dim, z_dim)
         self.lin_v = nn.Linear(rnn_dim, z_dim)
-        self.act = nn.Tanh()
 
     def init_z_q_0(self, trainable=True):
         return nn.Parameter(torch.zeros(self.z_dim), requires_grad=trainable)
@@ -156,7 +159,10 @@ class Combiner(nn.Module):
         z_t_1: tensor (b, z_dim)
         h_rnn: tensor (b, rnn_dim)
         """
-        h_comb = 0.5 * (self.act(self.lin1(z_t_1)) + h_rnn)
+        if not self.mean_field:
+            h_comb = 0.5 * (self.act(self.lin1(z_t_1)) + h_rnn)
+        else:
+            h_comb = h_rnn
         mu = self.lin2(h_comb)
         logvar = self.lin_v(h_comb)
 
