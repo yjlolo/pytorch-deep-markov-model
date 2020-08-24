@@ -58,7 +58,8 @@ def main(config):
                       config=config,
                       data_loader=data_loader,
                       valid_data_loader=valid_data_loader,
-                      lr_scheduler=lr_scheduler)
+                      lr_scheduler=lr_scheduler,
+                      overfit_single_batch=config['trainer']['overfit_single_batch'])
 
     trainer.train()
 

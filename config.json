@@ -49,6 +49,7 @@
     "loss": "dmm_loss",
     "trainer": {
         "epochs": 5000,
+        "overfit_single_batch": true,
 
         "save_dir": "saved/",
         "save_period": 500,

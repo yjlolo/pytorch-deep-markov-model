@@ -11,7 +11,7 @@ class Trainer(BaseTrainer):
     Trainer class
     """
     def __init__(self, model, criterion, metric_ftns, optimizer, config, data_loader,
-                 valid_data_loader=None, lr_scheduler=None, len_epoch=None):
+                 valid_data_loader=None, lr_scheduler=None, len_epoch=None, overfit_single_batch=False):
         super().__init__(model, criterion, metric_ftns, optimizer, config)
         self.config = config
         self.data_loader = data_loader
@@ -22,10 +22,11 @@ class Trainer(BaseTrainer):
             # iteration-based training
             self.data_loader = inf_loop(data_loader)
             self.len_epoch = len_epoch
-        self.valid_data_loader = valid_data_loader
+        self.valid_data_loader = valid_data_loader if not overfit_single_batch else None
         self.do_validation = self.valid_data_loader is not None
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
+        self.overfit_single_batch = overfit_single_batch
 
         # -------------------------------------------------
         # add flexibility to allow no metric in config.json
@@ -113,7 +114,7 @@ class Trainer(BaseTrainer):
                             self.train_metrics.write_to_logger(met.__name__, met(output, target))
             # ---------------------------------------------------
 
-            if batch_idx == self.len_epoch:
+            if batch_idx == self.len_epoch and self.overfit_single_batch:
                 break
 
         # ---------------------------------------------------
