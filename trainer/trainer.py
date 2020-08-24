@@ -72,10 +72,7 @@ class Trainer(BaseTrainer):
                                            self.config['trainer']['anneal_update'],
                                            epoch - 1, self.len_epoch, batch_idx)
             kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
-                self.criterion(0, x_mask,
-                               x=x, x_hat=x_recon,
-                               mu1=mu_q_seq, logvar1=logvar_q_seq,
-                               mu2=mu_p_seq, logvar2=logvar_p_seq)
+                self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 0, x_mask)
             loss.backward()
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10)
@@ -170,10 +167,7 @@ class Trainer(BaseTrainer):
                 x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
                     self.model(x, x_reversed, x_seq_lengths)
                 kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
-                    self.criterion(1, x_mask,
-                                   x=x, x_hat=x_recon,
-                                   mu1=mu_q_seq, logvar1=logvar_q_seq,
-                                   mu2=mu_p_seq, logvar2=logvar_p_seq)
+                    self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 1, x_mask)
 
                 for l_i, l_i_val in zip(self.log_loss, [loss, nll_aggr, kl_aggr]):
                     self.valid_metrics.update(l_i, l_i_val.item())
