@@ -53,7 +53,7 @@ class DeepMarkovModel(BaseModel):
         # self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training
         self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0(trainable=train_init)
         self.z_q_0 = self.combiner.init_z_q_0(trainable=train_init)
-        h_0 = self.encoder.init_hidden()
+        h_0 = self.encoder.init_hidden(trainable=train_init)
         if self.encoder.rnn_type == 'lstm':
             self.h_0, self.c_0 = h_0
         else:
