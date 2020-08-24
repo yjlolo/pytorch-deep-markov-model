@@ -16,6 +16,7 @@ class DeepMarkovModel(BaseModel):
                  rnn_dim,
                  rnn_type,
                  orthogonal_init,
+                 gated_transition,
                  sample=True):
         super().__init__()
         # specify parameters from `config`
@@ -30,6 +31,7 @@ class DeepMarkovModel(BaseModel):
         self.rnn_dim = rnn_dim
         self.rnn_type = rnn_type
         self.orthogonal_init = orthogonal_init
+        self.gated_transition = gated_transition
         self.sample = sample
         # self.n_mini_batch = len(self.train_dataloader())
 
@@ -37,7 +39,7 @@ class DeepMarkovModel(BaseModel):
         # generative model
         self.emitter = Emitter(z_dim, emission_dim, input_dim)
         self.transition = Transition(z_dim, transition_dim,
-                                     gated=True, identity_init=True)
+                                     gated=gated_transition, identity_init=True)
         # inference model
         self.combiner = Combiner(z_dim, rnn_dim)
         self.encoder = RnnEncoder(input_dim, rnn_dim,

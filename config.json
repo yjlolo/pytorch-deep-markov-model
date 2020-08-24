@@ -12,6 +12,7 @@
             "rnn_dim": 600,
             "rnn_type": "gru",
             "orthogonal_init": true,
+	    "gated_transition": false,
             "sample": false
         }
     },
