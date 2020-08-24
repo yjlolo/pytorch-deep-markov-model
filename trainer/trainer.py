@@ -77,6 +77,7 @@ class Trainer(BaseTrainer):
                                mu2=mu_p_seq, logvar2=logvar_p_seq)
             loss.backward()
 
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10)
             # ------------
             # accumulate gradients that are to be logged later after epoch ends
             for name, p in self.model.named_parameters():
