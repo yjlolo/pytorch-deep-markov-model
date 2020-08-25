@@ -167,7 +167,7 @@ def seq_collate_fn(batch):
 
 
 def pack_padded_seq(seq, seq_len, batch_first=True):
-    return nn.utils.rnn.pack_padded.sequence(
+    return nn.utils.rnn.pack_padded_sequence(
         seq,
         seq_len,
         batch_first=batch_first

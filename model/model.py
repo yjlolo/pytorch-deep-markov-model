@@ -45,6 +45,9 @@ class DeepMarkovModel(BaseModel):
 
         if use_embedding:
             self.embbedding = nn.Linear(input_dim, rnn_dim)
+            rnn_input_dim = rnn_dim
+        else:
+            rnn_input_dim = input_dim
 
         # instantiate components of DMM
         # generative model
@@ -53,7 +56,7 @@ class DeepMarkovModel(BaseModel):
                                      gated=gated_transition, identity_init=True)
         # inference model
         self.combiner = Combiner(z_dim, rnn_dim, mean_field=mean_field)
-        self.encoder = RnnEncoder(input_dim, rnn_dim,
+        self.encoder = RnnEncoder(rnn_input_dim, rnn_dim,
                                   n_layer=1, drop_rate=0.0,
                                   bd=False, nonlin='relu',
                                   rnn_type=rnn_type,
