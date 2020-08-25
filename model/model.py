@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from model.modules import Emitter, Transition, Combiner, RnnEncoder
 import data_loader.polyphonic_dataloader as poly
-from data_loader.seq_util import seq_collate_fn
+from data_loader.seq_util import seq_collate_fn, pack_padded_seq
 from base import BaseModel
 
 
@@ -16,6 +16,7 @@ class DeepMarkovModel(BaseModel):
                  rnn_dim,
                  rnn_type,
                  orthogonal_init,
+                 use_embedding,
                  gated_transition,
                  train_init,
                  mean_field=False,
@@ -33,6 +34,7 @@ class DeepMarkovModel(BaseModel):
         self.transition_dim = transition_dim
         self.rnn_dim = rnn_dim
         self.rnn_type = rnn_type
+        self.use_embedding = use_embedding
         self.orthogonal_init = orthogonal_init
         self.gated_transition = gated_transition
         self.train_init = train_init
@@ -40,6 +42,9 @@ class DeepMarkovModel(BaseModel):
         self.reverse_rnn_input = reverse_rnn_input
         self.sample = sample
         # self.n_mini_batch = len(self.train_dataloader())
+
+        if use_embedding:
+            self.embbedding = nn.Linear(input_dim, rnn_dim)
 
         # instantiate components of DMM
         # generative model
@@ -89,7 +94,7 @@ class DeepMarkovModel(BaseModel):
     #     return nn.BCEWithLogitsLoss(reduction='none')(x_hat, x)
 
     # def forward(self, x, x_reversed, x_mask, x_seq_lengths):
-    def forward(self, x, x_pack, x_reversed_pack, x_seq_lengths):
+    def forward(self, x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths):
         T_max = x.size(1)
         batch_size = x.size(0)
         if self.encoder.rnn_type == 'lstm':
@@ -102,9 +107,13 @@ class DeepMarkovModel(BaseModel):
                                  batch_size, self.rnn_dim).contiguous()
         # h_t carries information from t to T
         if self.encoder.reverse_input:
-            input = x_reversed_pack
+            if self.use_embedding:
+                x_reversed = self.embedding(x_reversed)
+            input = pack_padded_seq(x_reversed, x_seq_lengths)
         else:
-            input = x_pack
+            if self.use_embedding:
+                x = self.embedding(x)
+            input = pack_padded_seq(x, x_seq_lengths)
         if self.encoder.rnn_type == 'lstm':
             h_rnn = self.encoder(input, h0, x_seq_lengths, c0=c0)
         else:

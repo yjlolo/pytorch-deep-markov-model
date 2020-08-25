@@ -4,6 +4,7 @@ import torch
 from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
+from data_loader import seq_util
 
 
 class Trainer(BaseTrainer):
@@ -58,16 +59,19 @@ class Trainer(BaseTrainer):
         # ----------------
 
         for batch_idx, batch in enumerate(self.data_loader):
-            x, x_reversed_unpack, x_pack, x_reversed, x_mask, x_seq_lengths = batch
+            # x, x_reversed_unpack, x_pack, x_reversed, x_mask, x_seq_lengths = batch
+            x, x_reversed, x_mask, x_seq_lengths = batch
+
             x = x.to(self.device)
-            x_pack = x_pack.to(self.device)
             x_reversed = x_reversed.to(self.device)
+            x_pack = seq_util.pack_padded_seq(x, x_seq_lengths).to(self.device)
+            x_reversed_pack = seq_util.pack_padded_seq(x_reversed, x_seq_lengths).to(self.device)
             x_mask = x_mask.to(self.device)
             x_seq_lengths = x_seq_lengths.to(self.device)
 
             self.optimizer.zero_grad()
             x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
-                self.model(x, x_pack, x_reversed, x_seq_lengths)
+                self.model(x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths)
             kl_annealing_factor = \
                 determine_annealing_factor(self.config['trainer']['min_anneal_factor'],
                                            self.config['trainer']['anneal_update'],
@@ -158,16 +162,18 @@ class Trainer(BaseTrainer):
         self.valid_metrics.reset()
         with torch.no_grad():
             for batch_idx, batch in enumerate(self.valid_data_loader):
-                x, x_reversed_unpack, x_pack, x_reversed, x_mask, x_seq_lengths = batch
+                x, x_reversed, x_mask, x_seq_lengths = batch
+
                 x = x.to(self.device)
-                x_pack = x_pack.to(self.device)
                 x_reversed = x_reversed.to(self.device)
+                x_pack = seq_util.pack_padded_seq(x, x_seq_lengths).to(self.device)
+                x_reversed_pack = seq_util.pack_padded_seq(x_reversed, x_seq_lengths).to(self.device)
                 x_mask = x_mask.to(self.device)
                 x_seq_lengths = x_seq_lengths.to(self.device)
 
                 self.optimizer.zero_grad()
                 x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
-                    self.model(x, x_pack, x_reversed, x_seq_lengths)
+                    self.model(x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths)
                 kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
                     self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 1, x_mask)
 
