@@ -11,13 +11,15 @@
             "transition_dim": 200,
             "rnn_dim": 600,
             "rnn_type": "lstm",
+            "rnn_layers": 2,
+            "rnn_bidirection": true,
             "use_embedding": true,
             "orthogonal_init": true,
 	        "gated_transition": false,
             "train_init": false,
             "mean_field": true,
             "reverse_rnn_input": false,
-            "sample": false
+            "sample": false,
         }
     },
     "data_loader_train": {

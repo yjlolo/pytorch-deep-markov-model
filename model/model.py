@@ -15,6 +15,7 @@ class DeepMarkovModel(BaseModel):
                  transition_dim,
                  rnn_dim,
                  rnn_type,
+                 rnn_layers,
                  orthogonal_init,
                  use_embedding,
                  gated_transition,
@@ -34,6 +35,8 @@ class DeepMarkovModel(BaseModel):
         self.transition_dim = transition_dim
         self.rnn_dim = rnn_dim
         self.rnn_type = rnn_type
+        self.rnn_layers = rnn_layers
+        self.rnn_bidirection = rnn_bidirection
         self.use_embedding = use_embedding
         self.orthogonal_init = orthogonal_init
         self.gated_transition = gated_transition
@@ -44,7 +47,7 @@ class DeepMarkovModel(BaseModel):
         # self.n_mini_batch = len(self.train_dataloader())
 
         if use_embedding:
-            self.embbedding = nn.Linear(input_dim, rnn_dim)
+            self.embedding = nn.Linear(input_dim, rnn_dim)
             rnn_input_dim = rnn_dim
         else:
             rnn_input_dim = input_dim
@@ -55,10 +58,10 @@ class DeepMarkovModel(BaseModel):
         self.transition = Transition(z_dim, transition_dim,
                                      gated=gated_transition, identity_init=True)
         # inference model
-        self.combiner = Combiner(z_dim, rnn_dim, mean_field=mean_field)
+        self.combiner = Combiner(z_dim, rnn_dim * (bidirection + 1), mean_field=mean_field)
         self.encoder = RnnEncoder(rnn_input_dim, rnn_dim,
-                                  n_layer=1, drop_rate=0.0,
-                                  bd=False, nonlin='relu',
+                                  n_layer=rnn_layers, drop_rate=0.0,
+                                  bd=rnn_bidirection, nonlin='relu',
                                   rnn_type=rnn_type,
                                   reverse_input=reverse_rnn_input)
 

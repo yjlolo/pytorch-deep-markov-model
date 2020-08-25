@@ -130,6 +130,9 @@ class Trainer(BaseTrainer):
                     self.train_metrics.write_to_logger(met.__name__)
                 for name, p in dict_grad.items():
                     self.writer.add_histogram(name + '/grad', p, bins='auto')
+                 # add histogram of model parameters to the tensorboard
+                for name, p in self.model.named_parameters():
+                    self.writer.add_histogram(name, p, bins='auto')
                 self.writer.add_scalar('anneal_factor', kl_annealing_factor)
         # ---------------------------------------------------
         if epoch % 10 == 0:
@@ -216,9 +219,7 @@ class Trainer(BaseTrainer):
             # self.writer.add_figure('debug', debug_fig)
             self.writer.add_figure('debug_loss', debug_fig_loss)
 
-        # add histogram of model parameters to the tensorboard
-        for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins='auto')
+       
         return self.valid_metrics.result()
 
     def _progress(self, batch_idx):
