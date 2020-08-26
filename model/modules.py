@@ -246,7 +246,7 @@ class RnnEncoder(nn.Module):
             h0 = nn.Parameter(torch.zeros(self.n_layer * self.n_direction, 1, self.rnn_dim), requires_grad=trainable)
             return h0
 
-    def forward(self, x, h0, seq_lengths, c0=None):
+    def forward(self, x, seq_lengths):
         """
         x: pytorch packed object
             input packed data; this can be obtained from
@@ -254,10 +254,11 @@ class RnnEncoder(nn.Module):
         h0: tensor (n_layer * n_direction, b, rnn_dim)
         seq_lengths: tensor (b, )
         """
-        if self.rnn_type == 'lstm':
-            _h_rnn, _ = self.rnn(x, (h0, c0))
-        else:
-            _h_rnn, _ = self.rnn(x, h0)
+        # if self.rnn_type == 'lstm':
+        #     _h_rnn, _ = self.rnn(x, (h0, c0))
+        # else:
+        #     _h_rnn, _ = self.rnn(x, h0)
+        _h_rnn, _ = self.rnn(x)
         if self.reverse_input:
             h_rnn = pad_and_reverse(_h_rnn, seq_lengths)
         else:

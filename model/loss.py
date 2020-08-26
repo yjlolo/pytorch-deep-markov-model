@@ -14,7 +14,7 @@ def kl_div(mu1, logvar1, mu2=None, logvar2=None):
         ) / torch.exp(logvar2) - 1)
 
 
-def nll_loss(x_hat, x):
+def nll_loss(x_hat, x, mask):
     assert x_hat.dim() == x.dim() == 3
     assert x_hat.size(1) == x.size(1)
     assert x_hat.size(0) == x.size(0)
@@ -27,7 +27,11 @@ def nll_loss(x_hat, x):
         # rec_loss[:, t, :] = loss_fn(x_hat[:, t, :].contiguous().view(-1), x[:, t, :].contiguous().view(-1)) \
             # .view(batch_size, -1)
         rec_loss[:, t, :] = loss_fn(x_hat[:, t, :], x[:, t, :])
-    return rec_loss
+
+    rec_loss = rec_loss.mean(dim=-1)
+
+    mask = mask.gt(0).view(-1)
+    return rec_loss.view(-1).masked_select(mask).mean()
 
 
 def dmm_loss(x, x_hat, mu1, logvar1, mu2, logvar2, kl_annealing_factor=1, mask=None):

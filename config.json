@@ -51,7 +51,7 @@
             "betas": [0.96, 0.999]
         }
     },
-    "loss": "dmm_loss",
+    "loss": "nll_loss",
     "trainer": {
         "epochs": 5000,
         "overfit_single_batch": true,

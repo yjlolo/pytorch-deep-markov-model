@@ -25,11 +25,6 @@ class DeepMarkovModel(BaseModel):
                  reverse_rnn_input=True,
                  sample=True):
         super().__init__()
-        # specify parameters from `config`
-        # self.config = config
-        # self.anneal_epoch = config['annealing_epochs']
-        # self.anneal_update = config['annealing_updates']
-        # self.min_anneal_factor = config['min_annealing_factor']
         self.input_dim = input_dim
         self.z_dim = z_dim
         self.emission_dim = emission_dim
@@ -45,7 +40,6 @@ class DeepMarkovModel(BaseModel):
         self.mean_field = mean_field
         self.reverse_rnn_input = reverse_rnn_input
         self.sample = sample
-        # self.n_mini_batch = len(self.train_dataloader())
 
         if use_embedding:
             self.embedding = nn.Linear(input_dim, rnn_dim)
@@ -55,11 +49,12 @@ class DeepMarkovModel(BaseModel):
 
         # instantiate components of DMM
         # generative model
-        self.emitter = Emitter(z_dim, emission_dim, input_dim)
-        self.transition = Transition(z_dim, transition_dim,
-                                     gated=gated_transition, identity_init=True)
+        # self.emitter = Emitter(z_dim, emission_dim, input_dim)
+        self.emitter = Emitter(rnn_dim * (rnn_bidirection + 1), emission_dim, input_dim)
+        # self.transition = Transition(z_dim, transition_dim,
+        #                              gated=gated_transition, identity_init=True)
         # inference model
-        self.combiner = Combiner(z_dim, rnn_dim * (rnn_bidirection + 1), mean_field=mean_field)
+        # self.combiner = Combiner(z_dim, rnn_dim * (rnn_bidirection + 1), mean_field=mean_field)
         self.encoder = RnnEncoder(rnn_input_dim, rnn_dim,
                                   n_layer=rnn_layers, drop_rate=0.0,
                                   bd=rnn_bidirection, nonlin='relu',
@@ -68,23 +63,23 @@ class DeepMarkovModel(BaseModel):
 
         # initialize hidden states
         # self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training
-        self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0(trainable=train_init)
-        self.z_q_0 = self.combiner.init_z_q_0(trainable=train_init)
-        h_0 = self.encoder.init_hidden(trainable=train_init)
-        if self.encoder.rnn_type == 'lstm':
-            self.h_0, self.c_0 = h_0
-        else:
-            self.h_0 = h_0
+        # self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0(trainable=train_init)
+        # self.z_q_0 = self.combiner.init_z_q_0(trainable=train_init)
+        # h_0 = self.encoder.init_hidden(trainable=train_init)
+        # if self.encoder.rnn_type == 'lstm':
+        #     self.h_0, self.c_0 = h_0
+        # else:
+        #     self.h_0 = h_0
 
         # if config['use_cuda']:
         #     self.cuda()
 
-    def reparameterization(self, mu, logvar):
-        if not self.sample:
-            return mu
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
+    # def reparameterization(self, mu, logvar):
+    #     if not self.sample:
+    #         return mu
+    #     std = torch.exp(0.5 * logvar)
+    #     eps = torch.randn_like(std)
+    #     return mu + eps * std
 
     # def kl_div(self, mu1, logvar1, mu2=None, logvar2=None):
     #     if mu2 is None:
@@ -104,58 +99,31 @@ class DeepMarkovModel(BaseModel):
     def forward(self, x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths):
         T_max = x.size(1)
         batch_size = x.size(0)
-        if self.encoder.rnn_type == 'lstm':
-            h0 = self.h_0.expand(self.encoder.n_layer * self.encoder.n_direction,
-                                 batch_size, self.rnn_dim).contiguous()
-            c0 = self.c_0.expand(self.encoder.n_layer * self.encoder.n_direction,
-                                 batch_size, self.rnn_dim).contiguous()
-        else:
-            h0 = self.h_0.expand(self.encoder.n_layer * self.encoder.n_direction,
-                                 batch_size, self.rnn_dim).contiguous()
-        # h_t carries information from t to T
+
         if self.encoder.reverse_input:
-            if self.use_embedding:
-                x_reversed = self.embedding(x_reversed)
-            input = pack_padded_seq(x_reversed, x_seq_lengths)
+            input = x_reversed
         else:
-            if self.use_embedding:
-                x = self.embedding(x)
-            input = pack_padded_seq(x, x_seq_lengths)
-        if self.encoder.rnn_type == 'lstm':
-            h_rnn = self.encoder(input, h0, x_seq_lengths, c0=c0)
-        else:
-            h_rnn = self.encoder(input, h0, x_seq_lengths)
-        z_q_0 = self.z_q_0.expand(batch_size, self.z_q_0.size(0))
-        mu_p_0 = self.mu_p_0.expand(batch_size, 1, self.mu_p_0.size(0))
-        logvar_p_0 = self.logvar_p_0.expand(batch_size, 1, self.logvar_p_0.size(0))
-        z_prev = z_q_0
+            input = x
 
-        mu_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
-        logvar_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
-        mu_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
-        logvar_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
-        z_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
-        z_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
+        if self.use_embedding:
+            input = self.embedding(input)
+
+        input = pack_padded_seq(input, x_seq_lengths)
+        h_rnn = self.encoder(input, x_seq_lengths)
+
         x_recon = torch.zeros([batch_size, T_max, self.input_dim]).to(x.device)
-        # mu_q, logvar_q = self.combiner(z_prev, h_rnn)
-        # mu_q, logvar_q = self.combiner(z_prev, h_rnn.contiguous().view(-1, h_rnn.size(-1)))
-        # assert mu_q.size() == mu_q_seq.size()
-        # xt_recon = self.emitter(mu_q)
-        # xt_recon = self.emitter(mu_q).view(batch_size, T_max, -1)
-        # assert xt_recon.size() == x_recon.size()
-
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
-            mu_q, logvar_q = self.combiner(z_prev, h_rnn[:, t, :])
+            # mu_q, logvar_q = self.combiner(z_prev, h_rnn[:, t, :])
             # zt_q = self.reparameterization(mu_q, logvar_q)
             # z_prev = zt_q
             # p(z_t | z_{t-1})
             # mu_p, logvar_p = self.transition(z_prev)
             # zt_p = self.reparameterization(mu_p, logvar_p)
 
-            xt_recon = self.emitter(mu_q).contiguous()
+            xt_recon = self.emitter(h_rnn[:, t, :]).contiguous()
 
-            mu_q_seq[:, t, :] = mu_q
+            # mu_q_seq[:, t, :] = mu_q
             # logvar_q_seq[:, t, :] = logvar_q
             # mu_p_seq[:, t, :] = mu_p
             # logvar_p_seq[:, t, :] = logvar_p
@@ -163,12 +131,12 @@ class DeepMarkovModel(BaseModel):
             # z_p_seq[:, t, :] = zt_p
             x_recon[:, t, :] = xt_recon
 
-        mu_p_seq = torch.cat([mu_p_0, mu_p_seq[:, :-1, :]], dim=1)
-        logvar_p_seq = torch.cat([logvar_p_0, logvar_p_seq[:, :-1, :]], dim=1)
-        z_p_0 = self.reparameterization(mu_p_0, logvar_p_0)
-        z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
-
-        return x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq
+        # mu_p_seq = torch.cat([mu_p_0, mu_p_seq[:, :-1, :]], dim=1)
+        # logvar_p_seq = torch.cat([logvar_p_0, logvar_p_seq[:, :-1, :]], dim=1)
+        # z_p_0 = self.reparameterization(mu_p_0, logvar_p_0)
+        # z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
+        return x_recon
+        # return x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq
         # return xt_recon, z_q_seq, z_p_seq, mu_q, logvar_q_seq, mu_p_seq, logvar_p_seq
         # return xt_recon, z_q_seq, z_p_seq, mu_q.view(batch_size, T_max, -1), logvar_q_seq.view(batch_size, T_max, -1), mu_p_seq, logvar_p_seq
 
