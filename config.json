@@ -11,15 +11,15 @@
             "transition_dim": 200,
             "rnn_dim": 600,
             "rnn_type": "lstm",
-            "rnn_layers": 2,
+            "rnn_layers": 1,
             "rnn_bidirection": true,
-            "use_embedding": true,
+            "use_embedding": false,
             "orthogonal_init": true,
 	        "gated_transition": false,
             "train_init": false,
             "mean_field": true,
             "reverse_rnn_input": false,
-            "sample": false,
+            "sample": false
         }
     },
     "data_loader_train": {
@@ -57,7 +57,7 @@
         "overfit_single_batch": true,
 
         "save_dir": "saved/",
-        "save_period": 500,
+        "save_period": 5000,
         "verbosity": 2,
         
         "monitor": "min val_loss",

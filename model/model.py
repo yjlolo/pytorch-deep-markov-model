@@ -16,6 +16,7 @@ class DeepMarkovModel(BaseModel):
                  rnn_dim,
                  rnn_type,
                  rnn_layers,
+                 rnn_bidirection,
                  orthogonal_init,
                  use_embedding,
                  gated_transition,
@@ -58,7 +59,7 @@ class DeepMarkovModel(BaseModel):
         self.transition = Transition(z_dim, transition_dim,
                                      gated=gated_transition, identity_init=True)
         # inference model
-        self.combiner = Combiner(z_dim, rnn_dim * (bidirection + 1), mean_field=mean_field)
+        self.combiner = Combiner(z_dim, rnn_dim * (rnn_bidirection + 1), mean_field=mean_field)
         self.encoder = RnnEncoder(rnn_input_dim, rnn_dim,
                                   n_layer=rnn_layers, drop_rate=0.0,
                                   bd=rnn_bidirection, nonlin='relu',
@@ -136,45 +137,40 @@ class DeepMarkovModel(BaseModel):
         z_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         z_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         x_recon = torch.zeros([batch_size, T_max, self.input_dim]).to(x.device)
-        # kl_seq = torch.zeros([batch_size, T_max]).to(x.device)
-        # nll_seq = torch.zeros([batch_size, T_max]).to(x.device)
+        # mu_q, logvar_q = self.combiner(z_prev, h_rnn)
+        # mu_q, logvar_q = self.combiner(z_prev, h_rnn.contiguous().view(-1, h_rnn.size(-1)))
+        # assert mu_q.size() == mu_q_seq.size()
+        # xt_recon = self.emitter(mu_q)
+        # xt_recon = self.emitter(mu_q).view(batch_size, T_max, -1)
+        # assert xt_recon.size() == x_recon.size()
+
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
             mu_q, logvar_q = self.combiner(z_prev, h_rnn[:, t, :])
-            zt_q = self.reparameterization(mu_q, logvar_q)
-            z_prev = zt_q
+            # zt_q = self.reparameterization(mu_q, logvar_q)
+            # z_prev = zt_q
             # p(z_t | z_{t-1})
-            mu_p, logvar_p = self.transition(z_prev)
-            zt_p = self.reparameterization(mu_p, logvar_p)
+            # mu_p, logvar_p = self.transition(z_prev)
+            # zt_p = self.reparameterization(mu_p, logvar_p)
 
-            xt_recon = self.emitter(zt_q).contiguous()
+            xt_recon = self.emitter(mu_q).contiguous()
 
             mu_q_seq[:, t, :] = mu_q
-            logvar_q_seq[:, t, :] = logvar_q
-            mu_p_seq[:, t, :] = mu_p
-            logvar_p_seq[:, t, :] = logvar_p
-            z_q_seq[:, t, :] = zt_q
-            z_p_seq[:, t, :] = zt_p
+            # logvar_q_seq[:, t, :] = logvar_q
+            # mu_p_seq[:, t, :] = mu_p
+            # logvar_p_seq[:, t, :] = logvar_p
+            # z_q_seq[:, t, :] = zt_q
+            # z_p_seq[:, t, :] = zt_p
             x_recon[:, t, :] = xt_recon
 
-            # kl_seq[:, t] = self.kl_div(mu_q, logvar_q, mu_p, logvar_p)
-            # nll_seq[:, t] = self.nll_loss(
-            #     xt_recon.reshape(-1), x[:, t, :].reshape(-1)).reshape(batch_size, -1).mean(-1)
-            # assert not torch.isnan(nll_seq[:, t]).any()
-
-        # include the kl loss at the 0-th time-step (?) this should have impacts on learning z_0?
-        # apply mask and sum over time-axis
-        # nll_seq *= x_mask
-        # kl_seq *= x_mask
-        # nll_seq = nll_seq.sum(dim=-1)
-        # kl_seq = kl_seq.sum(dim=-1)
-        # return nll_seq.mean(), kl_seq.mean(), x_recon
         mu_p_seq = torch.cat([mu_p_0, mu_p_seq[:, :-1, :]], dim=1)
         logvar_p_seq = torch.cat([logvar_p_0, logvar_p_seq[:, :-1, :]], dim=1)
         z_p_0 = self.reparameterization(mu_p_0, logvar_p_0)
         z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
 
         return x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq
+        # return xt_recon, z_q_seq, z_p_seq, mu_q, logvar_q_seq, mu_p_seq, logvar_p_seq
+        # return xt_recon, z_q_seq, z_p_seq, mu_q.view(batch_size, T_max, -1), logvar_q_seq.view(batch_size, T_max, -1), mu_p_seq, logvar_p_seq
 
     # def determine_annealing_factor(self, epoch, batch_idx):
     #     n_updates = epoch * self.n_mini_batch + batch_idx + 1

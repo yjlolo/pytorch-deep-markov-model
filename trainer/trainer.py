@@ -78,6 +78,7 @@ class Trainer(BaseTrainer):
                                            epoch - 1, self.len_epoch, batch_idx)
             kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
                 self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 0, x_mask)
+
             loss.backward()
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10)
@@ -137,12 +138,12 @@ class Trainer(BaseTrainer):
         # ---------------------------------------------------
         if epoch % 10 == 0:
             fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
-            # debug_fig = create_debug_figure(x, x_reversed_unpack, x_mask)
-            debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
+            debug_fig = create_debug_figure(x, x_reversed, x_mask)
+            # debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
             self.writer.set_step(epoch)
             self.writer.add_figure('reconstruction', fig)
-            # self.writer.add_figure('debug', debug_fig)
-            self.writer.add_figure('debug_loss', debug_fig_loss)
+            self.writer.add_figure('debug', debug_fig)
+            # self.writer.add_figure('debug_loss', debug_fig_loss)
 
         log = self.train_metrics.result()
 
@@ -213,11 +214,11 @@ class Trainer(BaseTrainer):
         if epoch % 10 == 0:
             fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
             # debug_fig = create_debug_figure(x, x_reversed_unpack, x_mask)
-            debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
+            # debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
             self.writer.set_step(epoch, 'valid')
             self.writer.add_figure('reconstruction', fig)
             # self.writer.add_figure('debug', debug_fig)
-            self.writer.add_figure('debug_loss', debug_fig_loss)
+            # self.writer.add_figure('debug_loss', debug_fig_loss)
 
        
         return self.valid_metrics.result()
