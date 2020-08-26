@@ -120,6 +120,9 @@ class DeepMarkovModel(BaseModel):
         z_prev = None
 
         x_recon = torch.zeros([batch_size, T_max, self.input_dim]).to(x.device)
+        mu_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
+        logvar_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
+        z_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
             mu_q, logvar_q = self.combiner(h_rnn[:, t, :], z_prev)
@@ -131,8 +134,9 @@ class DeepMarkovModel(BaseModel):
 
             xt_recon = self.emitter(zt_q).contiguous()
 
-            # mu_q_seq[:, t, :] = mu_q
-            # logvar_q_seq[:, t, :] = logvar_q
+            mu_q_seq[:, t, :] = mu_q
+            logvar_q_seq[:, t, :] = logvar_q
+            z_q_seq[:, t, :] = zt_q
             # mu_p_seq[:, t, :] = mu_p
             # logvar_p_seq[:, t, :] = logvar_p
             # z_q_seq[:, t, :] = zt_q
@@ -143,7 +147,7 @@ class DeepMarkovModel(BaseModel):
         # logvar_p_seq = torch.cat([logvar_p_0, logvar_p_seq[:, :-1, :]], dim=1)
         # z_p_0 = self.reparameterization(mu_p_0, logvar_p_0)
         # z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
-        return x_recon
+        return x_recon, z_q_seq, mu_q_seq, logvar_q_seq
         # return x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq
         # return xt_recon, z_q_seq, z_p_seq, mu_q, logvar_q_seq, mu_p_seq, logvar_p_seq
         # return xt_recon, z_q_seq, z_p_seq, mu_q.view(batch_size, T_max, -1), logvar_q_seq.view(batch_size, T_max, -1), mu_p_seq, logvar_p_seq
