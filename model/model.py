@@ -122,7 +122,7 @@ class DeepMarkovModel(BaseModel):
         x_recon = torch.zeros([batch_size, T_max, self.input_dim]).to(x.device)
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
-            mu_q, logvar_q = self.combiner(z_prev, h_rnn[:, t, :])
+            mu_q, logvar_q = self.combiner(h_rnn[:, t, :], z_prev)
             zt_q = self.reparameterization(mu_q, logvar_q)
             # z_prev = zt_q
             # p(z_t | z_{t-1})
