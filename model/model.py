@@ -49,8 +49,7 @@ class DeepMarkovModel(BaseModel):
 
         # instantiate components of DMM
         # generative model
-        # self.emitter = Emitter(z_dim, emission_dim, input_dim)
-        self.emitter = Emitter(rnn_dim * (rnn_bidirection + 1), emission_dim, input_dim)
+        self.emitter = Emitter(z_dim, emission_dim, input_dim)
         # h_dim = int(rnn_dim/2)
         # self.emitter = Emitter(h_dim, emission_dim, input_dim)
         # self.transition = Transition(z_dim, transition_dim,
