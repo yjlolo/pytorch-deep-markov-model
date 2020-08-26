@@ -75,10 +75,9 @@ class Trainer(BaseTrainer):
             #     determine_annealing_factor(self.config['trainer']['min_anneal_factor'],
             #                                self.config['trainer']['anneal_update'],
             #                                epoch - 1, self.len_epoch, batch_idx)
-            # kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
+            # kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, loss = \
             #     self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 0, x_mask)
-            loss = self.criterion(x_recon, x, x_seq_lengths)
-
+            loss = self.criterion(x, x_recon, x_mask)
             loss.backward()
 
             # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10)
@@ -139,7 +138,8 @@ class Trainer(BaseTrainer):
                 # self.writer.add_scalar('anneal_factor', kl_annealing_factor)
         # ---------------------------------------------------
         if epoch % 10 == 0:
-            fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
+            x_recon = torch.nn.functional.sigmoid(x_recon.view(x.size(0), x.size(1), -1))
+            fig = create_reconstruction_figure(x, x_recon)
             debug_fig = create_debug_figure(x, x_reversed, x_mask)
             # debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
             self.writer.set_step(epoch)
@@ -251,10 +251,15 @@ def determine_annealing_factor(min_anneal_factor,
     return anneal_factor
 
 
-def create_reconstruction_figure(x, x_recon):
+def create_reconstruction_figure(x, x_recon, sample=True):
     plt.close()
-    x = x.cpu().detach().numpy()
-    x_recon = x_recon.cpu().detach().numpy()
+    print(x.shape, x_recon.shape)
+    if sample:
+        idx = np.random.choice(x.shape[0], 1)[0]
+    else:
+        idx = 0
+    x = x[idx].cpu().detach().numpy()
+    x_recon = x_recon[idx].cpu().detach().numpy()
     fig, ax = plt.subplots(2, 1, sharex=True, figsize=(10, 20))
     ax[0].imshow(x.T, origin='lower')
     ax[1].imshow(x_recon.T, origin='lower')

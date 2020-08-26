@@ -154,12 +154,13 @@ class Combiner(nn.Module):
     def init_z_q_0(self, trainable=True):
         return nn.Parameter(torch.zeros(self.z_dim), requires_grad=trainable)
 
-    def forward(self, z_t_1, h_rnn):
+    def forward(self, h_rnn, z_t_1=None):
         """
         z_t_1: tensor (b, z_dim)
         h_rnn: tensor (b, rnn_dim)
         """
         if not self.mean_field:
+            assert z_t_1 is not None
             h_comb = 0.5 * (self.act(self.lin1(z_t_1)) + h_rnn)
         else:
             h_comb = h_rnn

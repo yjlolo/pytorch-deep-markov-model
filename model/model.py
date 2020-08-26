@@ -51,15 +51,24 @@ class DeepMarkovModel(BaseModel):
         # generative model
         # self.emitter = Emitter(z_dim, emission_dim, input_dim)
         self.emitter = Emitter(rnn_dim * (rnn_bidirection + 1), emission_dim, input_dim)
+        # h_dim = int(rnn_dim/2)
+        # self.emitter = Emitter(h_dim, emission_dim, input_dim)
         # self.transition = Transition(z_dim, transition_dim,
         #                              gated=gated_transition, identity_init=True)
         # inference model
-        # self.combiner = Combiner(z_dim, rnn_dim * (rnn_bidirection + 1), mean_field=mean_field)
+        self.combiner = Combiner(z_dim, rnn_dim * (rnn_bidirection + 1), mean_field=mean_field)
         self.encoder = RnnEncoder(rnn_input_dim, rnn_dim,
                                   n_layer=rnn_layers, drop_rate=0.0,
                                   bd=rnn_bidirection, nonlin='relu',
                                   rnn_type=rnn_type,
                                   reverse_input=reverse_rnn_input)
+        # self.encoder = nn.Sequential(
+        #     nn.Linear(input_dim, h_dim),
+        #     nn.ReLU(),
+        #     nn.Linear(h_dim, h_dim),
+        #     nn.ReLU(),
+        #     nn.Linear(h_dim, input_dim),
+        # )
 
         # initialize hidden states
         # self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training
@@ -74,12 +83,12 @@ class DeepMarkovModel(BaseModel):
         # if config['use_cuda']:
         #     self.cuda()
 
-    # def reparameterization(self, mu, logvar):
-    #     if not self.sample:
-    #         return mu
-    #     std = torch.exp(0.5 * logvar)
-    #     eps = torch.randn_like(std)
-    #     return mu + eps * std
+    def reparameterization(self, mu, logvar):
+        if not self.sample:
+            return mu
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
 
     # def kl_div(self, mu1, logvar1, mu2=None, logvar2=None):
     #     if mu2 is None:
@@ -95,7 +104,6 @@ class DeepMarkovModel(BaseModel):
     # def nll_loss(self, x_hat, x):
     #     return nn.BCEWithLogitsLoss(reduction='none')(x_hat, x)
 
-    # def forward(self, x, x_reversed, x_mask, x_seq_lengths):
     def forward(self, x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths):
         T_max = x.size(1)
         batch_size = x.size(0)
@@ -110,18 +118,19 @@ class DeepMarkovModel(BaseModel):
 
         input = pack_padded_seq(input, x_seq_lengths)
         h_rnn = self.encoder(input, x_seq_lengths)
+        z_prev = None
 
         x_recon = torch.zeros([batch_size, T_max, self.input_dim]).to(x.device)
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
-            # mu_q, logvar_q = self.combiner(z_prev, h_rnn[:, t, :])
-            # zt_q = self.reparameterization(mu_q, logvar_q)
+            mu_q, logvar_q = self.combiner(z_prev, h_rnn[:, t, :])
+            zt_q = self.reparameterization(mu_q, logvar_q)
             # z_prev = zt_q
             # p(z_t | z_{t-1})
             # mu_p, logvar_p = self.transition(z_prev)
             # zt_p = self.reparameterization(mu_p, logvar_p)
 
-            xt_recon = self.emitter(h_rnn[:, t, :]).contiguous()
+            xt_recon = self.emitter(zt_q).contiguous()
 
             # mu_q_seq[:, t, :] = mu_q
             # logvar_q_seq[:, t, :] = logvar_q

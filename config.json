@@ -9,13 +9,13 @@
             "z_dim": 100,
             "emission_dim": 100,
             "transition_dim": 200,
-            "rnn_dim": 600,
+            "rnn_dim": 300,
             "rnn_type": "lstm",
-            "rnn_layers": 1,
-            "rnn_bidirection": true,
+            "rnn_layers": 2,
+            "rnn_bidirection": false,
             "use_embedding": false,
             "orthogonal_init": true,
-	        "gated_transition": false,
+	    "gated_transition": false,
             "train_init": false,
             "mean_field": true,
             "reverse_rnn_input": false,
@@ -45,13 +45,13 @@
     "optimizer": {
         "type": "Adam",
         "args":{
-            "lr": 0.0008,
-            "weight_decay": 2.0,
+            "lr": 0.001,
+            "weight_decay": 0.0,
             "amsgrad": true,
             "betas": [0.96, 0.999]
         }
     },
-    "loss": "nll_loss",
+    "loss": "dmm_loss",
     "trainer": {
         "epochs": 5000,
         "overfit_single_batch": true,
