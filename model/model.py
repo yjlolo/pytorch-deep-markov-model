@@ -52,8 +52,8 @@ class DeepMarkovModel(BaseModel):
         self.emitter = Emitter(z_dim, emission_dim, input_dim)
         # h_dim = int(rnn_dim/2)
         # self.emitter = Emitter(h_dim, emission_dim, input_dim)
-        # self.transition = Transition(z_dim, transition_dim,
-        #                              gated=gated_transition, identity_init=True)
+        self.transition = Transition(z_dim, transition_dim,
+                                     gated=gated_transition, identity_init=True)
         # inference model
         self.combiner = Combiner(z_dim, rnn_dim * (rnn_bidirection + 1), mean_field=mean_field)
         self.encoder = RnnEncoder(rnn_input_dim, rnn_dim,
@@ -71,16 +71,13 @@ class DeepMarkovModel(BaseModel):
 
         # initialize hidden states
         # self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training
-        # self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0(trainable=train_init)
-        # self.z_q_0 = self.combiner.init_z_q_0(trainable=train_init)
+        self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0(trainable=train_init)
+        self.z_q_0 = self.combiner.init_z_q_0(trainable=train_init)
         # h_0 = self.encoder.init_hidden(trainable=train_init)
         # if self.encoder.rnn_type == 'lstm':
         #     self.h_0, self.c_0 = h_0
         # else:
         #     self.h_0 = h_0
-
-        # if config['use_cuda']:
-        #     self.cuda()
 
     def reparameterization(self, mu, logvar):
         if not self.sample:
@@ -117,38 +114,44 @@ class DeepMarkovModel(BaseModel):
 
         input = pack_padded_seq(input, x_seq_lengths)
         h_rnn = self.encoder(input, x_seq_lengths)
-        z_prev = None
+        z_q_0 = self.z_q_0.expand(batch_size, self.z_dim)
+        mu_p_0 = self.mu_p_0.expand(batch_size, 1, self.z_dim)
+        logvar_p_0 = self.logvar_p_0.expand(batch_size, 1, self.z_dim)
+        z_prev = z_q_0
 
+        self.mu_p_0
         x_recon = torch.zeros([batch_size, T_max, self.input_dim]).to(x.device)
         mu_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         logvar_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
+        mu_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
+        logvar_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         z_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
+        z_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
             mu_q, logvar_q = self.combiner(h_rnn[:, t, :], z_prev)
             zt_q = self.reparameterization(mu_q, logvar_q)
-            # z_prev = zt_q
+            z_prev = zt_q
             # p(z_t | z_{t-1})
-            # mu_p, logvar_p = self.transition(z_prev)
-            # zt_p = self.reparameterization(mu_p, logvar_p)
+            mu_p, logvar_p = self.transition(z_prev)
+            zt_p = self.reparameterization(mu_p, logvar_p)
 
             xt_recon = self.emitter(zt_q).contiguous()
 
             mu_q_seq[:, t, :] = mu_q
             logvar_q_seq[:, t, :] = logvar_q
             z_q_seq[:, t, :] = zt_q
-            # mu_p_seq[:, t, :] = mu_p
-            # logvar_p_seq[:, t, :] = logvar_p
-            # z_q_seq[:, t, :] = zt_q
-            # z_p_seq[:, t, :] = zt_p
+            mu_p_seq[:, t, :] = mu_p
+            logvar_p_seq[:, t, :] = logvar_p
+            z_p_seq[:, t, :] = zt_p
             x_recon[:, t, :] = xt_recon
 
-        # mu_p_seq = torch.cat([mu_p_0, mu_p_seq[:, :-1, :]], dim=1)
-        # logvar_p_seq = torch.cat([logvar_p_0, logvar_p_seq[:, :-1, :]], dim=1)
-        # z_p_0 = self.reparameterization(mu_p_0, logvar_p_0)
-        # z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
-        return x_recon, z_q_seq, mu_q_seq, logvar_q_seq
-        # return x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq
+        mu_p_seq = torch.cat([mu_p_0, mu_p_seq[:, :-1, :]], dim=1)
+        logvar_p_seq = torch.cat([logvar_p_0, logvar_p_seq[:, :-1, :]], dim=1)
+        z_p_0 = self.reparameterization(mu_p_0, logvar_p_0)
+        z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
+        # return x_recon, z_q_seq, mu_q_seq, logvar_q_seq
+        return x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq
         # return xt_recon, z_q_seq, z_p_seq, mu_q, logvar_q_seq, mu_p_seq, logvar_p_seq
         # return xt_recon, z_q_seq, z_p_seq, mu_q.view(batch_size, T_max, -1), logvar_q_seq.view(batch_size, T_max, -1), mu_p_seq, logvar_p_seq
 

@@ -17,9 +17,9 @@
             "orthogonal_init": true,
 	    "gated_transition": false,
             "train_init": false,
-            "mean_field": true,
+            "mean_field": false,
             "reverse_rnn_input": false,
-            "sample": false
+            "sample": true 
         }
     },
     "data_loader_train": {

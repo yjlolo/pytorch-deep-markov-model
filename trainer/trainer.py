@@ -69,7 +69,8 @@ class Trainer(BaseTrainer):
             x_seq_lengths = x_seq_lengths.to(self.device)
 
             self.optimizer.zero_grad()
-            x_recon, z_q_seq, mu_q_seq, logvar_q_seq = \
+            # x_recon, z_q_seq, mu_q_seq, logvar_q_seq = \
+            x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
                 self.model(x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths)
             kl_annealing_factor = \
                 determine_annealing_factor(self.config['trainer']['min_anneal_factor'],
@@ -78,7 +79,8 @@ class Trainer(BaseTrainer):
             # kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, loss = \
             #     self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 0, x_mask)
             kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, loss = \
-                self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, kl_annealing_factor, x_mask)
+                self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, kl_annealing_factor, x_mask)
+                #self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, kl_annealing_factor, x_mask)
             loss.backward()
 
             # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10)
