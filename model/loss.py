@@ -14,24 +14,28 @@ def kl_div(mu1, logvar1, mu2=None, logvar2=None):
         ) / torch.exp(logvar2) - 1)
 
 
-def nll_loss(x_hat, x, mask):
+def nll_loss(x_hat, x, x_seq_len):
     assert x_hat.dim() == x.dim() == 3
-    assert x_hat.size(1) == x.size(1)
-    assert x_hat.size(0) == x.size(0)
+    assert x.size() == x_hat.size()
     loss_fn = nn.BCEWithLogitsLoss(reduction='none')
     T_max = x_hat.size(1)
     batch_size = x_hat.size(0)
     rec_loss = torch.zeros_like(x_hat)
     x = x.type_as(x_hat)
-    for t in range(T_max):
+    loss = torch.tensor(0.0, device=x.device)
+    for i in range(batch_size):
+        loss_i = torch.tensor(0.0, device=x.device)
+        for t in range(x_seq_len[i]):
         # rec_loss[:, t, :] = loss_fn(x_hat[:, t, :].contiguous().view(-1), x[:, t, :].contiguous().view(-1)) \
             # .view(batch_size, -1)
-        rec_loss[:, t, :] = loss_fn(x_hat[:, t, :], x[:, t, :])
+            loss_i += loss_fn(x_hat[i, t, :], x[i, t, :]).mean()
+        loss += loss_i.div(x_seq_len[i])
+    loss = loss.div(batch_size)
+    return loss
+    # rec_loss = rec_loss.mean(dim=-1)
 
-    rec_loss = rec_loss.mean(dim=-1)
-
-    mask = mask.gt(0).view(-1)
-    return rec_loss.view(-1).masked_select(mask).mean()
+    # mask = mask.gt(0).view(-1)
+    # return rec_loss.view(-1).masked_select(mask).mean()
 
 
 def dmm_loss(x, x_hat, mu1, logvar1, mu2, logvar2, kl_annealing_factor=1, mask=None):

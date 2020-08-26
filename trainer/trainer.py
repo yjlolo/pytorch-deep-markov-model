@@ -77,7 +77,7 @@ class Trainer(BaseTrainer):
             #                                epoch - 1, self.len_epoch, batch_idx)
             # kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
             #     self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 0, x_mask)
-            loss = self.criterion(x_recon, x, x_mask)
+            loss = self.criterion(x_recon, x, x_seq_lengths)
 
             loss.backward()
 
