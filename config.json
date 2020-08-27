@@ -63,7 +63,7 @@
     },
     "loss": "dmm_loss",
     "metrics": [
-        "elbo_eval"
+        "elbo_eval", "importance_sample"
     ],
     "trainer": {
         "epochs": 10000,

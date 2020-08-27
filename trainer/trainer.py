@@ -4,7 +4,6 @@ import torch
 from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
-from data_loader import seq_util
 
 
 class Trainer(BaseTrainer):
@@ -27,6 +26,7 @@ class Trainer(BaseTrainer):
         self.valid_data_loader = valid_data_loader if not overfit_single_batch else None
         self.test_data_loader = test_data_loader if not overfit_single_batch else None
         self.do_validation = self.valid_data_loader is not None
+        self.do_test = self.test_data_loader is not None
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
         self.overfit_single_batch = overfit_single_batch
@@ -41,6 +41,7 @@ class Trainer(BaseTrainer):
         else:
             self.train_metrics = MetricTracker(*self.log_loss, *[m.__name__ for m in self.metric_ftns], writer=self.writer)
             self.valid_metrics = MetricTracker(*self.log_loss, *[m.__name__ for m in self.metric_ftns], writer=self.writer)
+            self.test_metrics = MetricTracker(*[m.__name__ for m in self.metric_ftns], writer=self.writer)
 
     def _train_epoch(self, epoch):
         """
@@ -65,14 +66,12 @@ class Trainer(BaseTrainer):
 
             x = x.to(self.device)
             x_reversed = x_reversed.to(self.device)
-            x_pack = seq_util.pack_padded_seq(x, x_seq_lengths).to(self.device)
-            x_reversed_pack = seq_util.pack_padded_seq(x_reversed, x_seq_lengths).to(self.device)
             x_mask = x_mask.to(self.device)
             x_seq_lengths = x_seq_lengths.to(self.device)
 
             self.optimizer.zero_grad()
             x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
-                self.model(x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths)
+                self.model(x, x_reversed, x_seq_lengths)
             kl_annealing_factor = \
                 determine_annealing_factor(self.config['trainer']['min_anneal_factor'],
                                            self.config['trainer']['anneal_update'],
@@ -157,6 +156,10 @@ class Trainer(BaseTrainer):
             val_log = self._valid_epoch(epoch)
             log.update(**{'val_' + k: v for k, v in val_log.items()})
 
+        if self.do_test:# and epoch % 10 == 0:
+            test_log = self._test_epoch(epoch)
+            log.update(**{'test_' + k: v for k, v in test_log.items()})
+
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
         return log
@@ -176,13 +179,11 @@ class Trainer(BaseTrainer):
 
                 x = x.to(self.device)
                 x_reversed = x_reversed.to(self.device)
-                x_pack = seq_util.pack_padded_seq(x, x_seq_lengths).to(self.device)
-                x_reversed_pack = seq_util.pack_padded_seq(x_reversed, x_seq_lengths).to(self.device)
                 x_mask = x_mask.to(self.device)
                 x_seq_lengths = x_seq_lengths.to(self.device)
 
                 x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
-                    self.model(x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths)
+                    self.model(x, x_reversed, x_seq_lengths)
                 kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, loss = \
                     self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 1, x_mask)
 
@@ -229,6 +230,41 @@ class Trainer(BaseTrainer):
             # self.writer.add_figure('debug_loss', debug_fig_loss)
 
         return self.valid_metrics.result()
+
+    def _test_epoch(self, epoch):
+        self.model.eval()
+        self.test_metrics.reset()
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(self.test_data_loader):
+                x, x_reversed, x_mask, x_seq_lengths = batch
+
+                x = x.to(self.device)
+                x_reversed = x_reversed.to(self.device)
+                x_mask = x_mask.to(self.device)
+                x_seq_lengths = x_seq_lengths.to(self.device)
+
+                x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
+                    self.model(x, x_reversed, x_seq_lengths)
+
+                if self.metric_ftns is not None:
+                    for met in self.metric_ftns:
+                        if met.__name__ == 'elbo_eval':
+                            self.test_metrics.update(met.__name__,
+                                                        met([x_recon, mu_q_seq, logvar_q_seq],
+                                                            [x, mu_p_seq, logvar_p_seq], mask=x_mask))
+                        if met.__name__ == 'importance_sample':
+                            self.test_metrics.update(met.__name__,
+                                                        met(self.model, x, x_reversed, x_seq_lengths, x_mask, n_sample=5))
+        # ---------------------------------------------------
+        # add flexibility to log either per step or per epoch
+        if self.writer is not None:
+            if self.config['trainer']['log_on_epoch']:
+                self.writer.set_step(epoch, 'test')
+                if self.metric_ftns is not None:
+                    for met in self.metric_ftns:
+                        self.test_metrics.write_to_logger(met.__name__)
+        # ---------------------------------------------------
+        return self.test_metrics.result()
 
     def _progress(self, batch_idx):
         base = '[{}/{} ({:.0f}%)]'

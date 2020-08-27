@@ -1,5 +1,6 @@
 import torch
-from loss import nll_loss, kl_div
+from torch.distributions import Normal
+from model.loss import nll_loss, kl_div
 
 
 def accuracy(output, target):
@@ -50,8 +51,29 @@ def elbo_eval(output, target, mask):
     x_recon, mu_q, logvar_q = output
     x, mu_p, logvar_p = target
     # batch_size = x.size(0)
-    elbo = nll_metric(x_recon, x, mask) + \
-        kl_div_metric(mu_q, logvar_q, mu_p, logvar_p)
+    neg_elbo = nll_metric(x_recon, x, mask) + \
+        kl_div_metric([mu_q, logvar_q], [mu_p, logvar_p], mask)
     # tsbn_bound_sum = elbo.div(mask.sum(dim=1, keepdim=True)).sum().div(batch_size)
-    bound_sum = elbo.sum().div(mask.sum())
+    bound_sum = neg_elbo.sum().div(mask.sum())
     return bound_sum
+
+
+def importance_sample(model, x, x_reversed, x_seq_lengths, mask, n_sample=2000):
+    x = x.repeat(n_sample, 1, 1)
+    x_reversed = x_reversed.repeat(n_sample, 1, 1)
+    x_seq_lengths = x_seq_lengths.repeat(n_sample)  # make sure the shape
+    x_mask = mask.repeat(n_sample, 1)
+
+    x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
+        model(x, x_reversed, x_seq_lengths, enforce_sorted=False)
+
+    q_dist = Normal(mu_q_seq, logvar_q_seq.exp().sqrt())  # make sure if the shape is eligible
+    p_dist = Normal(mu_p_seq, logvar_p_seq.exp().sqrt())
+    log_qz = q_dist.log_prob(z_q_seq).sum(dim=-1) * x_mask
+    log_pz = p_dist.log_prob(z_q_seq).sum(dim=-1) * x_mask
+    log_px_z = -1 * nll_loss(x_recon, x).sum(dim=-1) * x_mask
+    ll_estimate = log_px_z.sum(dim=1, keepdim=True) + \
+        log_pz.sum(dim=1, keepdim=True) - \
+        log_qz.sum(dim=1, keepdim=True)
+    ll_estimate = ll_estimate.sum().div(n_sample).div(mask.sum())
+    return ll_estimate

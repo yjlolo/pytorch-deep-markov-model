@@ -86,7 +86,7 @@ class DeepMarkovModel(BaseModel):
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths):
+    def forward(self, x, x_reversed, x_seq_lengths, enforce_sorted=True):
         T_max = x.size(1)
         batch_size = x.size(0)
 
@@ -98,7 +98,7 @@ class DeepMarkovModel(BaseModel):
         if self.use_embedding:
             input = self.embedding(input)
 
-        input = pack_padded_seq(input, x_seq_lengths)
+        input = pack_padded_seq(input, x_seq_lengths, enforce_sorted=enforce_sorted)
         h_rnn = self.encoder(input, x_seq_lengths)
         z_q_0 = self.z_q_0.expand(batch_size, self.z_dim)
         mu_p_0 = self.mu_p_0.expand(batch_size, 1, self.z_dim)

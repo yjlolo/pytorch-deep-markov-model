@@ -153,9 +153,9 @@ def seq_collate_fn(batch):
     return mini_batch, mini_batch_reversed, mini_batch_mask, sorted_seq_lengths
 
 
-def pack_padded_seq(seq, seq_len, batch_first=True):
+def pack_padded_seq(seq, seq_len, batch_first=True, enforce_sorted=True):
     return nn.utils.rnn.pack_padded_sequence(
         seq,
         seq_len,
-        batch_first=batch_first
+        batch_first=batch_first, enforce_sorted=enforce_sorted
     )

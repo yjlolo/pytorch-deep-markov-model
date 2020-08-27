@@ -25,6 +25,7 @@ def main(config):
     # setup data_loader instances
     data_loader = config.init_obj('data_loader_train', module_data)
     valid_data_loader = config.init_obj('data_loader_valid', module_data)
+    test_data_loader = config.init_obj('data_loader_test', module_data)
 
     # build model architecture, then print to console
     model = config.init_obj('arch', module_arch)
@@ -58,6 +59,7 @@ def main(config):
                       config=config,
                       data_loader=data_loader,
                       valid_data_loader=valid_data_loader,
+                      test_data_loader=test_data_loader,
                       lr_scheduler=lr_scheduler,
                       overfit_single_batch=config['trainer']['overfit_single_batch'])
 
