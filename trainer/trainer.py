@@ -69,18 +69,14 @@ class Trainer(BaseTrainer):
             x_seq_lengths = x_seq_lengths.to(self.device)
 
             self.optimizer.zero_grad()
-            # x_recon, z_q_seq, mu_q_seq, logvar_q_seq = \
             x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
                 self.model(x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths)
             kl_annealing_factor = \
                 determine_annealing_factor(self.config['trainer']['min_anneal_factor'],
                                            self.config['trainer']['anneal_update'],
                                            epoch - 1, self.len_epoch, batch_idx)
-            # kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, loss = \
-            #     self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 0, x_mask)
             kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, loss = \
                 self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, kl_annealing_factor, x_mask)
-                #self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, kl_annealing_factor, x_mask)
             loss.backward()
 
             # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10)
@@ -142,11 +138,11 @@ class Trainer(BaseTrainer):
         if epoch % 10 == 0:
             x_recon = torch.nn.functional.sigmoid(x_recon.view(x.size(0), x.size(1), -1))
             fig = create_reconstruction_figure(x, x_recon)
-            debug_fig = create_debug_figure(x, x_reversed, x_mask)
+            # debug_fig = create_debug_figure(x, x_reversed, x_mask)
             # debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
             self.writer.set_step(epoch)
             self.writer.add_figure('reconstruction', fig)
-            self.writer.add_figure('debug', debug_fig)
+            # self.writer.add_figure('debug', debug_fig)
             # self.writer.add_figure('debug_loss', debug_fig_loss)
 
         log = self.train_metrics.result()
@@ -179,13 +175,12 @@ class Trainer(BaseTrainer):
                 x_mask = x_mask.to(self.device)
                 x_seq_lengths = x_seq_lengths.to(self.device)
 
-                self.optimizer.zero_grad()
                 x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
                     self.model(x, x_reversed, x_pack, x_reversed_pack, x_seq_lengths)
-                kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_aggr, nll_aggr, loss = \
+                kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, loss = \
                     self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 1, x_mask)
 
-                for l_i, l_i_val in zip(self.log_loss, [loss, nll_aggr, kl_aggr]):
+                for l_i, l_i_val in zip(self.log_loss, [loss, nll_m, kl_m]):
                     self.valid_metrics.update(l_i, l_i_val.item())
                 if self.metric_ftns is not None:
                     for met in self.metric_ftns:
@@ -196,7 +191,7 @@ class Trainer(BaseTrainer):
                 if self.writer is not None:
                     if not self.config['trainer']['log_on_epoch']:
                         self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                        for l_i, l_i_val in zip(self.log_loss, [loss, nll_aggr, kl_aggr]):
+                        for l_i, l_i_val in zip(self.log_loss, [loss, nll_m, kl_m]):
                             self.valid_metrics.write_to_logger(l_i, l_i_val.item())
                         if self.metric_ftns is not None:
                             for met in self.metric_ftns:
@@ -216,7 +211,8 @@ class Trainer(BaseTrainer):
         # ---------------------------------------------------
 
         if epoch % 10 == 0:
-            fig = create_reconstruction_figure(x[0], torch.nn.Sigmoid()(x_recon[0]))
+            x_recon = torch.nn.functional.sigmoid(x_recon.view(x.size(0), x.size(1), -1))
+            fig = create_reconstruction_figure(x, x_recon)
             # debug_fig = create_debug_figure(x, x_reversed_unpack, x_mask)
             # debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
             self.writer.set_step(epoch, 'valid')
@@ -224,7 +220,6 @@ class Trainer(BaseTrainer):
             # self.writer.add_figure('debug', debug_fig)
             # self.writer.add_figure('debug_loss', debug_fig_loss)
 
-       
         return self.valid_metrics.result()
 
     def _progress(self, batch_idx):
