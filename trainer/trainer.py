@@ -12,7 +12,8 @@ class Trainer(BaseTrainer):
     Trainer class
     """
     def __init__(self, model, criterion, metric_ftns, optimizer, config, data_loader,
-                 valid_data_loader=None, lr_scheduler=None, len_epoch=None, overfit_single_batch=False):
+                 valid_data_loader=None, test_data_loader=None,
+                 lr_scheduler=None, len_epoch=None, overfit_single_batch=False):
         super().__init__(model, criterion, metric_ftns, optimizer, config)
         self.config = config
         self.data_loader = data_loader
@@ -24,6 +25,7 @@ class Trainer(BaseTrainer):
             self.data_loader = inf_loop(data_loader)
             self.len_epoch = len_epoch
         self.valid_data_loader = valid_data_loader if not overfit_single_batch else None
+        self.test_data_loader = test_data_loader if not overfit_single_batch else None
         self.do_validation = self.valid_data_loader is not None
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
@@ -94,7 +96,10 @@ class Trainer(BaseTrainer):
                 self.train_metrics.update(l_i, l_i_val.item())
             if self.metric_ftns is not None:
                 for met in self.metric_ftns:
-                    self.train_metrics.update(met.__name__, met(output, target))
+                    if met.__name__ == 'elbo_eval':
+                        self.train_metrics.update(met.__name__,
+                                                  met([x_recon, mu_q_seq, logvar_q_seq],
+                                                      [x, mu_p_seq, logvar_p_seq], mask=x_mask))
 
             if batch_idx % self.log_step == 0:
                 self.logger.debug('Train Epoch: {} {} Loss: {:.6f}'.format(
@@ -127,10 +132,11 @@ class Trainer(BaseTrainer):
                 for l_i in self.log_loss:
                     self.train_metrics.write_to_logger(l_i)
                 if self.metric_ftns is not None:
-                    self.train_metrics.write_to_logger(met.__name__)
+                    if met.__name__ == 'elbo_eval':
+                        self.train_metrics.write_to_logger(met.__name__)
                 for name, p in dict_grad.items():
                     self.writer.add_histogram(name + '/grad', p, bins='auto')
-                 # add histogram of model parameters to the tensorboard
+                # add histogram of model parameters to the tensorboard
                 for name, p in self.model.named_parameters():
                     self.writer.add_histogram(name, p, bins='auto')
                 # self.writer.add_scalar('anneal_factor', kl_annealing_factor)
@@ -184,8 +190,10 @@ class Trainer(BaseTrainer):
                     self.valid_metrics.update(l_i, l_i_val.item())
                 if self.metric_ftns is not None:
                     for met in self.metric_ftns:
-                        self.valid_metrics.update(met.__name__, met(output, target))
-
+                        if met.__name__ == 'elbo_eval':
+                            self.valid_metrics.update(met.__name__,
+                                                      met([x_recon, mu_q_seq, logvar_q_seq],
+                                                          [x, mu_p_seq, logvar_p_seq], mask=x_mask))
                 # ---------------------------------------------------
                 # add flexibility to log either per step or per epoch
                 if self.writer is not None:
