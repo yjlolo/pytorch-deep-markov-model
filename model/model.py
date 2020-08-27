@@ -55,7 +55,7 @@ class DeepMarkovModel(BaseModel):
         self.transition = Transition(z_dim, transition_dim,
                                      gated=gated_transition, identity_init=True)
         # inference model
-        self.combiner = Combiner(z_dim, rnn_dim * (rnn_bidirection + 1), mean_field=mean_field)
+        self.combiner = Combiner(z_dim, rnn_dim, mean_field=mean_field)
         self.encoder = RnnEncoder(rnn_input_dim, rnn_dim,
                                   n_layer=rnn_layers, drop_rate=0.0,
                                   bd=rnn_bidirection, nonlin='relu',
@@ -129,7 +129,8 @@ class DeepMarkovModel(BaseModel):
         z_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
-            mu_q, logvar_q = self.combiner(h_rnn[:, t, :], z_prev)
+            mu_q, logvar_q = self.combiner(h_rnn[:, t, :], z_prev,
+                                           rnn_bidirection=self.rnn_bidirection)
             zt_q = self.reparameterization(mu_q, logvar_q)
             z_prev = zt_q
             # p(z_t | z_{t-1})

@@ -12,13 +12,13 @@
             "rnn_dim": 600,
             "rnn_type": "gru",
             "rnn_layers": 1,
-            "rnn_bidirection": false,
+            "rnn_bidirection": true,
             "use_embedding": false,
             "orthogonal_init": true,
-	    "gated_transition": false,
+	    "gated_transition": true,
             "train_init": false,
             "mean_field": false,
-            "reverse_rnn_input": true,
+            "reverse_rnn_input": false,
             "sample": true 
         }
     },
