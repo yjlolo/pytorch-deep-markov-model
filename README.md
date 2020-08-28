@@ -10,7 +10,7 @@ PyTorch re-implementatoin of the Deep Markov Model (https://arxiv.org/abs/1609.0
     pages = {2101–2109},
     numpages = {9},
     location = {San Francisco, California, USA},
-series = {AAAI'17}
+    series = {AAAI'17}
 }
 ```
 **Note:** The calculated metrics in `model/metrics.py` do not match those reported in the paper, which might be (more likely) due to differences in parameter settings and metric calculations.
