@@ -2,31 +2,30 @@
 PyTorch re-implementatoin of the Deep Markov Model (https://arxiv.org/abs/1609.09869)
 ```
 @inproceedings{10.5555/3298483.3298543,
-               author = {Krishnan, Rahul G. and Shalit, Uri and Sontag, David},
-               title = {Structured Inference Networks for Nonlinear State Space Models},
-               year = {2017},
-               publisher = {AAAI Press},
-               booktitle = {Proceedings of the Thirty-First AAAI Conference on Artificial Intelligence},
-               pages = {2101–2109},
-               numpages = {9},
-               location = {San Francisco, California, USA},
-               series = {AAAI'17}
+    author = {Krishnan, Rahul G. and Shalit, Uri and Sontag, David},
+    title = {Structured Inference Networks for Nonlinear State Space Models},
+    year = {2017},
+    publisher = {AAAI Press},
+    booktitle = {Proceedings of the Thirty-First AAAI Conference on Artificial Intelligence},
+    pages = {2101–2109},
+    numpages = {9},
+    location = {San Francisco, California, USA},
+series = {AAAI'17}
 }
 ```
 **Note:** The calculated metrics in `model/metrics.py` do not match those reported in the paper, which might be (more likely) due to differences in parameter settings and metric calculations.
 
 ## Usage
 Training the model with the default `config.json`:
-
-    ```
+    
     python train.py -c config.json
-    ```
+
 
 add `-i` flag to specifically name the experiment that is to be saved under `saved/`.
 
 ## `config.json`
 This file specifies parameters and configurations.
-See below for some key parameters.
+Below explains some key parameters.
 
 **A careful fine-tuning of the parameters seems necessary to match the reported performances.**
 ```javascript
@@ -80,10 +79,9 @@ See below for some key parameters.
 ```
 
 ## Acknowledgements
+0. Project template brought from the [pytorch-template](https://github.com/victoresque/pytorch-template)
 1. The original [source code](https://github.com/clinicalml/structuredinference/tree/master/expt-polyphonic-fast) in Theano
-
 2. PyTorch implementation in [Pyro](https://github.com/pyro-ppl/pyro/tree/dev/examples/dmm) framework
-
 3. Another PyTorch implementation by [@guxd](https://github.com/guxd/deepHMM)
 
 ## To-Do
