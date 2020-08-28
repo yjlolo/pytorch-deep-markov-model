@@ -13,7 +13,9 @@ PyTorch re-implementatoin of the Deep Markov Model (https://arxiv.org/abs/1609.0
     series = {AAAI'17}
 }
 ```
-**Note:** The calculated metrics in `model/metrics.py` do not match those reported in the paper, which might be (more likely) due to differences in parameter settings and metric calculations.
+**Note:** 
+1. The calculated metrics in `model/metrics.py` do not match those reported in the paper, which might be (more likely) due to differences in parameter settings and metric calculations.
+2. The current implementatoin only supports JSB polyphonic music dataset.
 
 ## Usage
 Training the model with the default `config.json`:
