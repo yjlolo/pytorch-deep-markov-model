@@ -82,7 +82,7 @@ Below explains some key parameters.
 }
 ```
 
-## Acknowledgements
+## References
 0. Project template brought from the [pytorch-template](https://github.com/victoresque/pytorch-template)
 1. The original [source code](https://github.com/clinicalml/structuredinference/tree/master/expt-polyphonic-fast) in Theano
 2. PyTorch implementation in [Pyro](https://github.com/pyro-ppl/pyro/tree/dev/examples/dmm) framework
