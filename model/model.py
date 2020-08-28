@@ -50,8 +50,6 @@ class DeepMarkovModel(BaseModel):
         # instantiate components of DMM
         # generative model
         self.emitter = Emitter(z_dim, emission_dim, input_dim)
-        # h_dim = int(rnn_dim/2)
-        # self.emitter = Emitter(h_dim, emission_dim, input_dim)
         self.transition = Transition(z_dim, transition_dim,
                                      gated=gated_transition, identity_init=True)
         # inference model
@@ -61,16 +59,8 @@ class DeepMarkovModel(BaseModel):
                                   bd=rnn_bidirection, nonlin='relu',
                                   rnn_type=rnn_type,
                                   reverse_input=reverse_rnn_input)
-        # self.encoder = nn.Sequential(
-        #     nn.Linear(input_dim, h_dim),
-        #     nn.ReLU(),
-        #     nn.Linear(h_dim, h_dim),
-        #     nn.ReLU(),
-        #     nn.Linear(h_dim, input_dim),
-        # )
 
         # initialize hidden states
-        # self.z_0 = self.transition.init_z_0()  # this does not seem to be updated during training
         self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0(trainable=train_init)
         self.z_q_0 = self.combiner.init_z_q_0(trainable=train_init)
         # h_0 = self.encoder.init_hidden(trainable=train_init)

@@ -20,11 +20,7 @@ def nll_loss(x_hat, x):
     return nn.BCEWithLogitsLoss(reduction='none')(x_hat, x)
 
 
-# def dmm_loss(x, x_hat, mu1, logvar1, mu2, logvar2,
-#              kl_annealing_factor=1, mask=None):
-# def dmm_loss(x, x_hat, mu1, logvar1, kl_annealing_factor=1, mask=None):
 def dmm_loss(x, x_hat, mu1, logvar1, mu2, logvar2, kl_annealing_factor=1, mask=None):
-    # kl_raw = kl_div(mu1, logvar1, mu2=None, logvar2=None)
     kl_raw = kl_div(mu1, logvar1, mu2, logvar2)
     nll_raw = nll_loss(x_hat, x)
     # feature-dimension reduced
@@ -40,7 +36,6 @@ def dmm_loss(x, x_hat, mu1, logvar1, mu2, logvar2, kl_annealing_factor=1, mask=N
         nll_m = nll_fr.view(-1).mean()
 
     loss = kl_m * kl_annealing_factor + nll_m
-    # loss = nll_m
 
     return kl_raw, nll_raw, \
         kl_fr, nll_fr, \
