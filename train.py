@@ -24,7 +24,16 @@ def main(config):
 
     # setup data_loader instances
     data_loader = config.init_obj('data_loader_train', module_data)
-    valid_data_loader = config.init_obj('data_loader_valid', module_data)
+    try:
+        valid_data_loader = config.init_obj('data_loader_valid', module_data)
+    except Exception:
+        warnings.warn("Validation dataloader not given.")
+        valid_data_loader = None
+    try:
+        test_data_loader = config.init_obj('data_loader_test', module_data)
+    except Exception:
+        warnings.warn("Test dataloader not given.")
+        test_data_loader = None
 
     # build model architecture, then print to console
     model = config.init_obj('arch', module_arch)
@@ -58,6 +67,7 @@ def main(config):
                       config=config,
                       data_loader=data_loader,
                       valid_data_loader=valid_data_loader,
+                      test_data_loader=test_data_loader,
                       lr_scheduler=lr_scheduler,
                       overfit_single_batch=config['trainer']['overfit_single_batch'])
 
@@ -72,6 +82,8 @@ if __name__ == '__main__':
                       help='path to latest checkpoint (default: None)')
     args.add_argument('-d', '--device', default=None, type=str,
                       help='indices of GPUs to enable (default: all)')
+    args.add_argument('-i', '--identifier', default=None, type=str,
+                      help='unique identifier of the experiment (default: None)')
 
     # custom cli options to modify configuration from default values given in json file.
     CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')

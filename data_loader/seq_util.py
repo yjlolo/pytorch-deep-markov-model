@@ -144,25 +144,12 @@ def seq_collate_fn(batch):
     _, sorted_seq_length_indices = torch.sort(seq_lengths)
     sorted_seq_length_indices = sorted_seq_length_indices.flip(0)
     sorted_seq_lengths = seq_lengths[sorted_seq_length_indices]
-    # sorted_mini_batch_indices = idx[sorted_seq_length_indices]
 
     T_max = torch.max(seq_lengths)
     mini_batch = seq[sorted_seq_length_indices, 0:T_max, :]
     mini_batch_reversed = reverse_sequence(mini_batch, sorted_seq_lengths)
     mini_batch_mask = get_mini_batch_mask(mini_batch, sorted_seq_lengths)
 
-    # mini_batch_reversed_pack = nn.utils.rnn.pack_padded_sequence(
-    #     mini_batch_reversed,
-    #     sorted_seq_lengths,
-    #     batch_first=True
-    # )
-    # mini_batch_pack = nn.utils.rnn.pack_padded_sequence(
-    #     mini_batch,
-    #     sorted_seq_lengths,
-    #     batch_first=True
-    # )
-
-    # return mini_batch, mini_batch_reversed, mini_batch_pack, mini_batch_reversed_pack, mini_batch_mask, sorted_seq_lengths
     return mini_batch, mini_batch_reversed, mini_batch_mask, sorted_seq_lengths
 
 

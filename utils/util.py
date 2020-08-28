@@ -47,6 +47,7 @@ class MetricTracker:
         return self._data.average[key]
 
     def result(self):
+        self._data = self._data[self._data.counts != 0]
         return dict(self._data.average)
 
     def write_to_logger(self, key, value=None):
