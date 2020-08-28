@@ -24,8 +24,16 @@ def main(config):
 
     # setup data_loader instances
     data_loader = config.init_obj('data_loader_train', module_data)
-    valid_data_loader = config.init_obj('data_loader_valid', module_data)
-    test_data_loader = config.init_obj('data_loader_test', module_data)
+    try:
+        valid_data_loader = config.init_obj('data_loader_valid', module_data)
+    except Exception:
+        warnings.warn("Validation dataloader not given.")
+        valid_data_loader = None
+    try:
+        test_data_loader = config.init_obj('data_loader_test', module_data)
+    except Exception:
+        warnings.warn("Test dataloader not given.")
+        test_data_loader = None
 
     # build model architecture, then print to console
     model = config.init_obj('arch', module_arch)

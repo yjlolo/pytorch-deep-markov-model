@@ -95,7 +95,7 @@ class Trainer(BaseTrainer):
                 self.train_metrics.update(l_i, l_i_val.item())
             if self.metric_ftns is not None:
                 for met in self.metric_ftns:
-                    if met.__name__ == 'elbo_eval':
+                    if met.__name__ == 'bound_eval':
                         self.train_metrics.update(met.__name__,
                                                   met([x_recon, mu_q_seq, logvar_q_seq],
                                                       [x, mu_p_seq, logvar_p_seq], mask=x_mask))
@@ -105,47 +105,35 @@ class Trainer(BaseTrainer):
                     epoch,
                     self._progress(batch_idx),
                     loss.item()))
-                # self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
-
-            # ---------------------------------------------------
-            # add flexibility to log either per step or per epoch
-            if self.writer is not None:
-                if not self.config['trainer']['log_on_epoch']:
-                    self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
-                    # for l_i, l_i_val in zip(self.log_loss, [loss, nll_aggr, kl_aggr]):
-                    for l_i, l_i_val in zip(self.log_loss, [loss]):
-                        self.train_metrics.write_to_logger(l_i, l_i_val.item())
-                    if self.metric_ftns is not None:
-                        for met in self.metric_ftns:
-                            self.train_metrics.write_to_logger(met.__name__, met(output, target))
-            # ---------------------------------------------------
 
             if batch_idx == self.len_epoch or self.overfit_single_batch:
                 break
 
         # ---------------------------------------------------
-        # add flexibility to log either per step or per epoch
         if self.writer is not None:
-            if self.config['trainer']['log_on_epoch']:
-                self.writer.set_step(epoch)
-                for l_i in self.log_loss:
-                    self.train_metrics.write_to_logger(l_i)
-                if self.metric_ftns is not None:
-                    if met.__name__ == 'elbo_eval':
-                        self.train_metrics.write_to_logger(met.__name__)
-                for name, p in dict_grad.items():
-                    self.writer.add_histogram(name + '/grad', p, bins='auto')
-                # add histogram of model parameters to the tensorboard
-                for name, p in self.model.named_parameters():
-                    self.writer.add_histogram(name, p, bins='auto')
-                # self.writer.add_scalar('anneal_factor', kl_annealing_factor)
+            self.writer.set_step(epoch, 'train')
+            # log losses
+            for l_i in self.log_loss:
+                self.train_metrics.write_to_logger(l_i)
+            # log metrics
+            if self.metric_ftns is not None:
+                if met.__name__ == 'bound_eval':
+                    self.train_metrics.write_to_logger(met.__name__)
+            # log gradients
+            for name, p in dict_grad.items():
+                self.writer.add_histogram(name + '/grad', p, bins='auto')
+            # log parameters
+            for name, p in self.model.named_parameters():
+                self.writer.add_histogram(name, p, bins='auto')
+            # log kl annealing factors
+            self.writer.add_scalar('anneal_factor', kl_annealing_factor)
         # ---------------------------------------------------
-        if epoch % 10 == 0:
-            x_recon = torch.nn.functional.sigmoid(x_recon.view(x.size(0), x.size(1), -1))
-            fig = create_reconstruction_figure(x, x_recon)
+
+        if epoch % 50 == 0:
+            fig = create_reconstruction_figure(x, torch.sigmoid(x_recon))
             # debug_fig = create_debug_figure(x, x_reversed, x_mask)
             # debug_fig_loss = create_debug_loss_figure(kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, x_mask)
-            self.writer.set_step(epoch)
+            self.writer.set_step(epoch, 'train')
             self.writer.add_figure('reconstruction', fig)
             # self.writer.add_figure('debug', debug_fig)
             # self.writer.add_figure('debug_loss', debug_fig_loss)
@@ -156,7 +144,7 @@ class Trainer(BaseTrainer):
             val_log = self._valid_epoch(epoch)
             log.update(**{'val_' + k: v for k, v in val_log.items()})
 
-        if self.do_test:# and epoch % 10 == 0:
+        if self.do_test and epoch % 50 == 0:
             test_log = self._test_epoch(epoch)
             log.update(**{'test_' + k: v for k, v in test_log.items()})
 
@@ -191,31 +179,19 @@ class Trainer(BaseTrainer):
                     self.valid_metrics.update(l_i, l_i_val.item())
                 if self.metric_ftns is not None:
                     for met in self.metric_ftns:
-                        if met.__name__ == 'elbo_eval':
+                        if met.__name__ == 'bound_eval':
                             self.valid_metrics.update(met.__name__,
                                                       met([x_recon, mu_q_seq, logvar_q_seq],
                                                           [x, mu_p_seq, logvar_p_seq], mask=x_mask))
-                # ---------------------------------------------------
-                # add flexibility to log either per step or per epoch
-                if self.writer is not None:
-                    if not self.config['trainer']['log_on_epoch']:
-                        self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                        for l_i, l_i_val in zip(self.log_loss, [loss, nll_m, kl_m]):
-                            self.valid_metrics.write_to_logger(l_i, l_i_val.item())
-                        if self.metric_ftns is not None:
-                            for met in self.metric_ftns:
-                                self.valid_metrics.write_to_logger(met.__name__, met(output, target))
-                # ---------------------------------------------------
 
         # ---------------------------------------------------
-        # add flexibility to log either per step or per epoch
         if self.writer is not None:
-            if self.config['trainer']['log_on_epoch']:
-                self.writer.set_step(epoch, 'valid')
-                for l_i in self.log_loss:
-                    self.valid_metrics.write_to_logger(l_i)
-                if self.metric_ftns is not None:
-                    for met in self.metric_ftns:
+            self.writer.set_step(epoch, 'valid')
+            for l_i in self.log_loss:
+                self.valid_metrics.write_to_logger(l_i)
+            if self.metric_ftns is not None:
+                for met in self.metric_ftns:
+                    if met.__name__ == 'bound_eval':
                         self.valid_metrics.write_to_logger(met.__name__)
         # ---------------------------------------------------
 
@@ -248,21 +224,27 @@ class Trainer(BaseTrainer):
 
                 if self.metric_ftns is not None:
                     for met in self.metric_ftns:
-                        if met.__name__ == 'elbo_eval':
+                        if met.__name__ == 'bound_eval':
                             self.test_metrics.update(met.__name__,
-                                                        met([x_recon, mu_q_seq, logvar_q_seq],
-                                                            [x, mu_p_seq, logvar_p_seq], mask=x_mask))
+                                                     met([x_recon, mu_q_seq, logvar_q_seq],
+                                                         [x, mu_p_seq, logvar_p_seq], mask=x_mask))
                         if met.__name__ == 'importance_sample':
                             self.test_metrics.update(met.__name__,
-                                                        met(self.model, x, x_reversed, x_seq_lengths, x_mask, n_sample=5))
+                                                     met(batch_idx, self.model, x, x_reversed, x_seq_lengths, x_mask, n_sample=500))
         # ---------------------------------------------------
-        # add flexibility to log either per step or per epoch
         if self.writer is not None:
-            if self.config['trainer']['log_on_epoch']:
-                self.writer.set_step(epoch, 'test')
-                if self.metric_ftns is not None:
-                    for met in self.metric_ftns:
-                        self.test_metrics.write_to_logger(met.__name__)
+            self.writer.set_step(epoch, 'test')
+            if self.metric_ftns is not None:
+                for met in self.metric_ftns:
+                    self.test_metrics.write_to_logger(met.__name__)
+
+            n_sample = 3
+            output_seq, z_p_seq, mu_p_seq, logvar_p_seq = self.model.generate(n_sample, 100)
+            plt.close()
+            fig, ax = plt.subplots(n_sample, 1, figsize=(10, n_sample * 10))
+            for i in range(n_sample):
+                ax[i].imshow(output_seq[i].T.detach(), origin='lower')
+            self.writer.add_figure('generation', fig)
         # ---------------------------------------------------
         return self.test_metrics.result()
 

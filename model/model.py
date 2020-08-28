@@ -86,7 +86,7 @@ class DeepMarkovModel(BaseModel):
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, x, x_reversed, x_seq_lengths, enforce_sorted=True):
+    def forward(self, x, x_reversed, x_seq_lengths):
         T_max = x.size(1)
         batch_size = x.size(0)
 
@@ -98,14 +98,13 @@ class DeepMarkovModel(BaseModel):
         if self.use_embedding:
             input = self.embedding(input)
 
-        input = pack_padded_seq(input, x_seq_lengths, enforce_sorted=enforce_sorted)
+        input = pack_padded_seq(input, x_seq_lengths)
         h_rnn = self.encoder(input, x_seq_lengths)
         z_q_0 = self.z_q_0.expand(batch_size, self.z_dim)
         mu_p_0 = self.mu_p_0.expand(batch_size, 1, self.z_dim)
         logvar_p_0 = self.logvar_p_0.expand(batch_size, 1, self.z_dim)
         z_prev = z_q_0
 
-        self.mu_p_0
         x_recon = torch.zeros([batch_size, T_max, self.input_dim]).to(x.device)
         mu_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         logvar_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
@@ -139,3 +138,21 @@ class DeepMarkovModel(BaseModel):
         z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
 
         return x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq
+
+    def generate(self, batch_size, seq_len):
+        mu_p = self.mu_p_0.expand(batch_size, self.z_dim)
+        logvar_p = self.logvar_p_0.expand(batch_size, self.z_dim)
+        z_p_seq = torch.zeros([batch_size, seq_len, self.z_dim]).to(mu_p.device)
+        mu_p_seq = torch.zeros([batch_size, seq_len, self.z_dim]).to(mu_p.device)
+        logvar_p_seq = torch.zeros([batch_size, seq_len, self.z_dim]).to(mu_p.device)
+        output_seq = torch.zeros([batch_size, seq_len, self.input_dim]).to(mu_p.device)
+        for t in range(seq_len):
+            mu_p_seq[:, t, :] = mu_p
+            logvar_p_seq[:, t, :] = logvar_p
+            z_p = self.reparameterization(mu_p, logvar_p)
+            xt = self.emitter(z_p)
+            mu_p, logvar_p = self.transition(z_p)
+
+            output_seq[:, t, :] = xt
+            z_p_seq[:, t, :] = z_p
+        return output_seq, z_p_seq, mu_p_seq, logvar_p_seq

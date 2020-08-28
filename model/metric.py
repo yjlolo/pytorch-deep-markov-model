@@ -1,3 +1,4 @@
+import time
 import torch
 from torch.distributions import Normal
 from model.loss import nll_loss, kl_div
@@ -47,7 +48,7 @@ def kl_div_metric(output, target, mask):
     return kl
 
 
-def elbo_eval(output, target, mask):
+def bound_eval(output, target, mask):
     x_recon, mu_q, logvar_q = output
     x, mu_p, logvar_p = target
     # batch_size = x.size(0)
@@ -58,22 +59,44 @@ def elbo_eval(output, target, mask):
     return bound_sum
 
 
-def importance_sample(model, x, x_reversed, x_seq_lengths, mask, n_sample=2000):
-    x = x.repeat(n_sample, 1, 1)
-    x_reversed = x_reversed.repeat(n_sample, 1, 1)
-    x_seq_lengths = x_seq_lengths.repeat(n_sample)  # make sure the shape
-    x_mask = mask.repeat(n_sample, 1)
+def importance_sample(batch_idx, model, x, x_reversed, x_seq_lengths, mask, n_sample=500):
+    sample_batch_size = 25
+    n_batch = n_sample // sample_batch_size
+    sample_left = n_sample % sample_batch_size
+    if sample_left == 0:
+        n_loop = n_batch
+    else:
+        n_loop = n_batch + 1
 
-    x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
-        model(x, x_reversed, x_seq_lengths, enforce_sorted=False)
+    ll_estimate = torch.zeros(n_loop).to(x.device)
 
-    q_dist = Normal(mu_q_seq, logvar_q_seq.exp().sqrt())  # make sure if the shape is eligible
-    p_dist = Normal(mu_p_seq, logvar_p_seq.exp().sqrt())
-    log_qz = q_dist.log_prob(z_q_seq).sum(dim=-1) * x_mask
-    log_pz = p_dist.log_prob(z_q_seq).sum(dim=-1) * x_mask
-    log_px_z = -1 * nll_loss(x_recon, x).sum(dim=-1) * x_mask
-    ll_estimate = log_px_z.sum(dim=1, keepdim=True) + \
-        log_pz.sum(dim=1, keepdim=True) - \
-        log_qz.sum(dim=1, keepdim=True)
-    ll_estimate = ll_estimate.sum().div(n_sample).div(mask.sum())
+    start_time = time.time()
+    for i in range(n_loop):
+        if i < n_batch:
+            n_repeats = sample_batch_size
+        else:
+            n_repeats = sample_left
+
+        x_tile = x.repeat_interleave(repeats=n_repeats, dim=0)
+        x_reversed_tile = x_reversed.repeat_interleave(repeats=n_repeats, dim=0)
+        x_seq_lengths_tile = x_seq_lengths.repeat_interleave(repeats=n_repeats, dim=0)
+        mask_tile = mask.repeat_interleave(repeats=n_repeats, dim=0)
+
+        x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
+            model(x_tile, x_reversed_tile, x_seq_lengths_tile)
+
+        q_dist = Normal(mu_q_seq, logvar_q_seq.exp().sqrt())
+        p_dist = Normal(mu_p_seq, logvar_p_seq.exp().sqrt())
+        log_qz = q_dist.log_prob(z_q_seq).sum(dim=-1) * mask_tile
+        log_pz = p_dist.log_prob(z_q_seq).sum(dim=-1) * mask_tile
+        log_px_z = -1 * nll_loss(x_recon, x_tile).sum(dim=-1) * mask_tile
+        ll_estimate_ = log_px_z.sum(dim=1, keepdim=True) + \
+            log_pz.sum(dim=1, keepdim=True) - \
+            log_qz.sum(dim=1, keepdim=True)
+
+        ll_estimate[i] = ll_estimate_.sum().div(mask.sum())
+
+    ll_estimate = ll_estimate.sum().div(n_sample)
+    print("%s-th batch, importance sampling took %.4f seconds." % (batch_idx, time.time() - start_time))
+
     return ll_estimate
