@@ -243,7 +243,7 @@ class Trainer(BaseTrainer):
             plt.close()
             fig, ax = plt.subplots(n_sample, 1, figsize=(10, n_sample * 10))
             for i in range(n_sample):
-                ax[i].imshow(output_seq[i].T.detach(), origin='lower')
+                ax[i].imshow(output_seq[i].T.cpu().detach().numpy(), origin='lower')
             self.writer.add_figure('generation', fig)
         # ---------------------------------------------------
         return self.test_metrics.result()
