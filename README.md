@@ -17,6 +17,10 @@ PyTorch re-implementatoin of the Deep Markov Model (https://arxiv.org/abs/1609.0
 1. The calculated metrics in `model/metrics.py` do not match those reported in the paper, which might be (more likely) due to differences in parameter settings and metric calculations.
 2. The current implementatoin only supports JSB polyphonic music dataset.
 
+## Under-development
+Refer to the branch `factorial-dmm` for a model described as [Factorial DMM](https://groups.csail.mit.edu/sls/publications/2019/SameerKhurana_ICASSP-2019.pdf).
+The other branch `refractor` is trying to improve readability with increased options of models.
+
 ## Usage
 Training the model with the default `config.json`:
     
