@@ -144,18 +144,18 @@ class Combiner(nn.Module):
     logvar: tensor (b, z_dim)
         Log-var that parameterizes the variational Gaussian distribution
     """
-    def __init__(self, z_dim, rnn_dim, mean_field=False, global_cond_infer=False, y_dim=None):
+    def __init__(self, z_dim, rnn_dim, mean_field=False, global_var_cond_infer=False, y_dim=None):
         super().__init__()
         self.z_dim = z_dim
         self.rnn_dim = rnn_dim
         self.mean_field = mean_field
-        self.global_cond_infer = global_cond_infer
+        self.global_var_cond_infer = global_var_cond_infer
         self.y_dim = y_dim
 
         if y_dim is None:
             warnings.warn("`y_dim == None`, ignoring `global_cond_infer`.")
         else:
-            if global_cond_infer:
+            if global_var_cond_infer:
                 self.lin_y_to_h = nn.Linear(y_dim, rnn_dim)
                 self.act_y_to_h = nn.Tanh()
 
@@ -190,7 +190,7 @@ class Combiner(nn.Module):
             _h_comb += self.act_z_to_h(self.lin_z_to_h(z_t_1))
             n_terms += 1
 
-        if self.global_cond_infer:
+        if self.global_var_cond_infer:
             assert y is not None
             _h_comb += self.act_y_to_h(self.lin_y_to_h(y))
             n_terms += 1

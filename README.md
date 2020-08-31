@@ -42,9 +42,7 @@ Below explains some key parameters.
             "rnn_dim": 600,
             "rnn_type": "lstm",
             "rnn_layers": 1,
-            "rnn_bidirection": false,   // condition z_t on both directions of inputs,
-	    				// manually turn off `reverse_rnn_input` if True
-					// (this is minor and could be quickly fixed)
+            "rnn_bidirection": false,   // condition z_t on both directions of inputs
             "use_embedding": true,      // use extra linear layer before RNN
             "orthogonal_init": true,    // orthogonal initialization for RNN
 	    "gated_transition": true,       // use linear/non-linear gated transition

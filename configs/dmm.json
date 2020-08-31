@@ -1,0 +1,82 @@
+{
+    "name": "DMM",
+    "n_gpu": 1,
+
+    "arch": {
+        "type": "DeepMarkovModel",
+        "args": {
+            "input_dim": 88,
+            "z_dim": 100,
+            "emission_dim": 100,
+            "transition_dim": 200,
+            "rnn_dim": 600,
+            "rnn_type": "lstm",
+            "rnn_layers": 1,
+            "rnn_bidirection": false,
+            "orthogonal_init": true,
+            "use_embedding": true,
+            "gated_transition": true,
+            "train_init": false,
+            "mean_field": false,
+            "reverse_rnn_input": true,
+            "sample_mean": true
+        }
+    },
+    "data_loader_train": {
+        "type": "PolyMusicDataLoader",
+        "args":{
+            "batch_size": 20,
+            "data_dir": "jsb",
+            "split": "train",
+            "shuffle": true,
+            "num_workers": 1
+        }
+    },
+    "data_loader_valid": {
+        "type": "PolyMusicDataLoader",
+        "args":{
+            "batch_size": 20,
+            "data_dir": "jsb",
+            "split": "valid",
+            "shuffle": false,
+            "num_workers": 1
+        }
+    },
+    "data_loader_test": {
+        "type": "PolyMusicDataLoader",
+        "args":{
+            "batch_size": 20,
+            "data_dir": "jsb",
+            "split": "test",
+            "shuffle": false,
+            "num_workers": 1
+        }
+    },
+    "optimizer": {
+        "type": "Adam",
+        "args":{
+            "lr": 0.0008,
+            "weight_decay": 0.0,
+            "amsgrad": true,
+            "betas": [0.9, 0.999]
+        }
+    },
+    "trainer": {
+        "epochs": 3000,
+        "overfit_single_batch": false,
+
+        "save_dir": "saved/",
+        "save_period": 500,
+        "verbosity": 2,
+        
+        "monitor": "min val_loss",
+        "early_stop": 100,
+
+        "tensorboard": true,
+
+        "kl_weight": 1.0,
+        "min_anneal_factor": 0.0,
+        "anneal_update": 5000
+    }
+}
+

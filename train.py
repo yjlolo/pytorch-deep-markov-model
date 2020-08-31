@@ -4,9 +4,7 @@ import collections
 import torch
 import numpy as np
 import data_loader.data_loaders as module_data
-import model.loss as module_loss
-import model.metric as module_metric
-import model.model as module_arch
+import model as module_arch
 from parse_config import ConfigParser
 from trainer import Trainer
 
@@ -40,14 +38,14 @@ def main(config):
     logger.info(model)
 
     # get function handles of loss and metrics
-    criterion = getattr(module_loss, config['loss'])
-    try:
-        metrics = [getattr(module_metric, met) for met in config['metrics']]
+    # criterion = getattr(module_loss, config['loss'])
+    # try:
+    #     metrics = [getattr(module_metric, met) for met in config['metrics']]
     # -------------------------------------------------
     # add flexibility to allow no metric in config.json
-    except Exception:
-        warnings.warn("No metrics are configured.")
-        metrics = None
+    # except Exception:
+    #     warnings.warn("No metrics are configured.")
+    #     metrics = None
     # -------------------------------------------------
 
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
@@ -63,7 +61,7 @@ def main(config):
         lr_scheduler = None
     # -------------------------------------------------
 
-    trainer = Trainer(model, criterion, metrics, optimizer,
+    trainer = Trainer(model, optimizer,
                       config=config,
                       data_loader=data_loader,
                       valid_data_loader=valid_data_loader,
