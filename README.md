@@ -19,7 +19,7 @@ PyTorch re-implementatoin of the Deep Markov Model (https://arxiv.org/abs/1609.0
 
 ## Under-development
 Refer to the branch `factorial-dmm` for a model described as [Factorial DMM](https://groups.csail.mit.edu/sls/publications/2019/SameerKhurana_ICASSP-2019.pdf).
-The other branch `refractor` is trying to improve readability with increased options of models.
+The other branch `refractor` is trying to improve readability with increased options of models (DOCUMENT NOT UPDATED YET!).
 
 ## Usage
 Training the model with the default `config.json`:
