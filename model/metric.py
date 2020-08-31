@@ -34,26 +34,35 @@ def nll_metric(output, target, mask):
     return loss
 
 
-def kl_div_metric(output, target, mask):
+def kl_div_metric(output, mask, target=None):
     mu1, logvar1 = output
-    mu2, logvar2 = target
-    assert mu1.size() == mu2.size()
-    assert logvar1.size() == logvar2.size()
     assert mu1.dim() == logvar1.dim() == 3
     assert mask.dim() == 2
     assert mask.size(1) == mu1.size(1)
-    kl = kl_div(mu1, logvar1, mu2, logvar2)
+    if target is not None:
+        mu2, logvar2 = target
+        assert mu1.size() == mu2.size()
+        assert logvar1.size() == logvar2.size()
+        kl = kl_div(mu1, logvar1, mu2, logvar2)
+    else:
+        kl = kl_div(mu1, logvar1)
+
     kl = mask * kl.sum(dim=-1)
     kl = kl.sum(dim=1, keepdim=True)
     return kl
 
 
 def bound_eval(output, target, mask):
-    x_recon, mu_q, logvar_q = output
+    x_recon, mu_q, logvar_q, mu_y, logvar_y = output
     x, mu_p, logvar_p = target
     # batch_size = x.size(0)
-    neg_elbo = nll_metric(x_recon, x, mask) + \
-        kl_div_metric([mu_q, logvar_q], [mu_p, logvar_p], mask)
+    if mu_y is not None:
+        neg_elbo = nll_metric(x_recon, x, mask) + \
+            kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p]) + \
+            kl_div_metric([mu_p, logvar_p], mask, target=None)
+    else:
+        neg_elbo = nll_metric(x_recon, x, mask) + \
+            kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p])
     # tsbn_bound_sum = elbo.div(mask.sum(dim=1, keepdim=True)).sum().div(batch_size)
     bound_sum = neg_elbo.sum().div(mask.sum())
     return bound_sum

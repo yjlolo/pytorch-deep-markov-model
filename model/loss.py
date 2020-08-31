@@ -20,7 +20,15 @@ def nll_loss(x_hat, x):
     return nn.BCEWithLogitsLoss(reduction='none')(x_hat, x)
 
 
-def dmm_loss(x, x_hat, mu1, logvar1, mu2, logvar2, kl_annealing_factor=1, mask=None):
+def dmm_loss(x, x_hat, mu1, logvar1, mu2, logvar2, kl_annealing_factor=1, mask=None,
+             mu_y=None, logvar_y=None):
+    if mu_y is not None and logvar_y is not None:
+        kl_y = kl_div(mu_y, logvar_y).mean()
+        multiplier = 2
+    else:
+        kl_y = torch.tensor(0, device=x.device)
+        multiplier = 1
+
     kl_raw = kl_div(mu1, logvar1, mu2, logvar2)
     nll_raw = nll_loss(x_hat, x)
     # feature-dimension reduced
@@ -35,9 +43,10 @@ def dmm_loss(x, x_hat, mu1, logvar1, mu2, logvar2, kl_annealing_factor=1, mask=N
         kl_m = kl_fr.view(-1).mean()
         nll_m = nll_fr.view(-1).mean()
 
-    loss = kl_m * kl_annealing_factor + nll_m
+    loss = (kl_annealing_factor / multiplier) * (kl_m + kl_y) + nll_m
 
     return kl_raw, nll_raw, \
         kl_fr, nll_fr, \
         kl_m, nll_m, \
+        kl_y, \
         loss

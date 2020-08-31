@@ -1,6 +1,7 @@
+import warnings
 import torch
 import torch.nn as nn
-from model.modules import Emitter, Transition, Combiner, RnnEncoder
+from model.modules import Emitter, Transition, Combiner, RnnEncoder, RnnGlobalEncoder
 import data_loader.polyphonic_dataloader as poly
 from data_loader.seq_util import seq_collate_fn, pack_padded_seq
 from base import BaseModel
@@ -23,7 +24,10 @@ class DeepMarkovModel(BaseModel):
                  train_init,
                  mean_field=False,
                  reverse_rnn_input=True,
-                 sample=True):
+                 include_global_encoder=False,
+                 global_cond_infer=False,
+                 sample=True,
+                 y_dim=None):
         super().__init__()
         self.input_dim = input_dim
         self.z_dim = z_dim
@@ -39,7 +43,10 @@ class DeepMarkovModel(BaseModel):
         self.train_init = train_init
         self.mean_field = mean_field
         self.reverse_rnn_input = reverse_rnn_input
+        self.include_global_encoder = include_global_encoder
+        self.global_cond_infer = global_cond_infer
         self.sample = sample
+        self.y_dim = y_dim
 
         if use_embedding:
             self.embedding = nn.Linear(input_dim, rnn_dim)
@@ -47,13 +54,31 @@ class DeepMarkovModel(BaseModel):
         else:
             rnn_input_dim = input_dim
 
+        # augmentation of a global variable encoder as in
+        # FDMM (https://groups.csail.mit.edu/sls/publications/2019/SameerKhurana_ICASSP-2019.pdf)
+        if include_global_encoder:
+            assert y_dim is not None, "Specify `y_dim` if `include_global_encoder`."
+            self.global_encoder = RnnGlobalEncoder(y_dim, rnn_input_dim, rnn_dim,
+                                                   n_layer=rnn_layers, drop_rate=0.0,
+                                                   bd=True, nonlin='relu',
+                                                   rnn_type=rnn_type,
+                                                   reverse_input=False,
+                                                   average_pool=True)
+        else:
+            warnings.warn("`include_global_encoder == False`, rendering `y_dim = None`.")
+            y_dim = None
+
         # instantiate components of DMM
         # generative model
-        self.emitter = Emitter(z_dim, emission_dim, input_dim)
+        self.emitter = Emitter(z_dim, emission_dim, input_dim,
+                               y_dim=y_dim)
         self.transition = Transition(z_dim, transition_dim,
                                      gated=gated_transition, identity_init=True)
         # inference model
-        self.combiner = Combiner(z_dim, rnn_dim, mean_field=mean_field)
+        self.combiner = Combiner(z_dim, rnn_dim,
+                                 mean_field=mean_field,
+                                 global_cond_infer=global_cond_infer,
+                                 y_dim=y_dim)
         self.encoder = RnnEncoder(rnn_input_dim, rnn_dim,
                                   n_layer=rnn_layers, drop_rate=0.0,
                                   bd=rnn_bidirection, nonlin='relu',
@@ -76,7 +101,7 @@ class DeepMarkovModel(BaseModel):
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, x, x_reversed, x_seq_lengths):
+    def forward(self, x, x_reversed, x_seq_lengths, x_mask=None):
         T_max = x.size(1)
         batch_size = x.size(0)
 
@@ -89,6 +114,14 @@ class DeepMarkovModel(BaseModel):
             input = self.embedding(input)
 
         input = pack_padded_seq(input, x_seq_lengths)
+
+        if self.include_global_encoder:
+            mu_y, logvar_y = self.global_encoder(input, x_mask)
+            y = self.reparameterization(mu_y, logvar_y)
+        else:
+            mu_y, logvar_y = None, None
+            y = None
+
         h_rnn = self.encoder(input, x_seq_lengths)
         z_q_0 = self.z_q_0.expand(batch_size, self.z_dim)
         mu_p_0 = self.mu_p_0.expand(batch_size, 1, self.z_dim)
@@ -104,15 +137,21 @@ class DeepMarkovModel(BaseModel):
         z_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
-            mu_q, logvar_q = self.combiner(h_rnn[:, t, :], z_prev,
+            mu_q, logvar_q = self.combiner(h_x=h_rnn[:, t, :],
+                                           z_t_1=z_prev,
+                                           y=y,
                                            rnn_bidirection=self.rnn_bidirection)
             zt_q = self.reparameterization(mu_q, logvar_q)
             z_prev = zt_q
             # p(z_t | z_{t-1})
-            mu_p, logvar_p = self.transition(z_prev)
+            mu_p, logvar_p = self.transition(z_prev)  # we can also make it p(z_t|z_{t-1}, y)
             zt_p = self.reparameterization(mu_p, logvar_p)
 
-            xt_recon = self.emitter(zt_q).contiguous()
+            if y is not None:
+                input_to_emitter = torch.cat([zt_q, y], dim=-1)
+            else:
+                input_to_emitter = zt_q
+            xt_recon = self.emitter(input_to_emitter).contiguous()
 
             mu_q_seq[:, t, :] = mu_q
             logvar_q_seq[:, t, :] = logvar_q
@@ -127,7 +166,9 @@ class DeepMarkovModel(BaseModel):
         z_p_0 = self.reparameterization(mu_p_0, logvar_p_0)
         z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
 
-        return x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq
+        return x_recon, z_q_seq, z_p_seq, \
+            mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, \
+            mu_y, logvar_y
 
     def generate(self, batch_size, seq_len):
         mu_p = self.mu_p_0.expand(batch_size, self.z_dim)
@@ -140,7 +181,15 @@ class DeepMarkovModel(BaseModel):
             mu_p_seq[:, t, :] = mu_p
             logvar_p_seq[:, t, :] = logvar_p
             z_p = self.reparameterization(mu_p, logvar_p)
-            xt = self.emitter(z_p)
+
+            if self.include_global_encoder:
+                y = self.reparameterization(torch.zeros(batch_size, self.y_dim).to(z_p.device),
+                                            torch.zeros(batch_size, self.y_dim).to(z_p.device))
+                input_to_emitter = torch.cat([z_p, y], dim=-1)
+            else:
+                input_to_emitter = z_p
+
+            xt = self.emitter(input_to_emitter)
             mu_p, logvar_p = self.transition(z_p)
 
             output_seq[:, t, :] = xt

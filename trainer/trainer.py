@@ -33,7 +33,7 @@ class Trainer(BaseTrainer):
 
         # -------------------------------------------------
         # add flexibility to allow no metric in config.json
-        self.log_loss = ['loss', 'nll', 'kl']
+        self.log_loss = ['loss', 'nll', 'kl', 'kl_y']
         if self.metric_ftns is None:
             self.train_metrics = MetricTracker(*self.log_loss, writer=self.writer)
             self.valid_metrics = MetricTracker(*self.log_loss, writer=self.writer)
@@ -70,14 +70,15 @@ class Trainer(BaseTrainer):
             x_seq_lengths = x_seq_lengths.to(self.device)
 
             self.optimizer.zero_grad()
-            x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
-                self.model(x, x_reversed, x_seq_lengths)
+            x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, mu_y, logvar_y = \
+                self.model(x, x_reversed, x_seq_lengths, x_mask)
             kl_annealing_factor = \
                 determine_annealing_factor(self.config['trainer']['min_anneal_factor'],
                                            self.config['trainer']['anneal_update'],
                                            epoch - 1, self.len_epoch, batch_idx)
-            kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, loss = \
-                self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, kl_annealing_factor, x_mask)
+            kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_y, loss = \
+                self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, kl_annealing_factor, x_mask,
+                               mu_y=mu_y, logvar_y=logvar_y)
             loss.backward()
 
             # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10)
@@ -91,13 +92,13 @@ class Trainer(BaseTrainer):
 
             self.optimizer.step()
 
-            for l_i, l_i_val in zip(self.log_loss, [loss, nll_m, kl_m]):
+            for l_i, l_i_val in zip(self.log_loss, [loss, nll_m, kl_m, kl_y]):
                 self.train_metrics.update(l_i, l_i_val.item())
             if self.metric_ftns is not None:
                 for met in self.metric_ftns:
                     if met.__name__ == 'bound_eval':
                         self.train_metrics.update(met.__name__,
-                                                  met([x_recon, mu_q_seq, logvar_q_seq],
+                                                  met([x_recon, mu_q_seq, logvar_q_seq, mu_y, logvar_y],
                                                       [x, mu_p_seq, logvar_p_seq], mask=x_mask))
 
             if batch_idx % self.log_step == 0:
@@ -170,18 +171,19 @@ class Trainer(BaseTrainer):
                 x_mask = x_mask.to(self.device)
                 x_seq_lengths = x_seq_lengths.to(self.device)
 
-                x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
-                    self.model(x, x_reversed, x_seq_lengths)
-                kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, loss = \
-                    self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 1, x_mask)
+                x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, mu_y, logvar_y = \
+                    self.model(x, x_reversed, x_seq_lengths, x_mask)
+                kl_raw, nll_raw, kl_fr, nll_fr, kl_m, nll_m, kl_y, loss = \
+                    self.criterion(x, x_recon, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, 1, x_mask,
+                                   mu_y=mu_y, logvar_y=logvar_y)
 
-                for l_i, l_i_val in zip(self.log_loss, [loss, nll_m, kl_m]):
+                for l_i, l_i_val in zip(self.log_loss, [loss, nll_m, kl_m, kl_y]):
                     self.valid_metrics.update(l_i, l_i_val.item())
                 if self.metric_ftns is not None:
                     for met in self.metric_ftns:
                         if met.__name__ == 'bound_eval':
                             self.valid_metrics.update(met.__name__,
-                                                      met([x_recon, mu_q_seq, logvar_q_seq],
+                                                      met([x_recon, mu_q_seq, logvar_q_seq, mu_y, logvar_y],
                                                           [x, mu_p_seq, logvar_p_seq], mask=x_mask))
 
         # ---------------------------------------------------
@@ -219,14 +221,14 @@ class Trainer(BaseTrainer):
                 x_mask = x_mask.to(self.device)
                 x_seq_lengths = x_seq_lengths.to(self.device)
 
-                x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq = \
-                    self.model(x, x_reversed, x_seq_lengths)
+                x_recon, z_q_seq, z_p_seq, mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, mu_y, logvar_y = \
+                    self.model(x, x_reversed, x_seq_lengths, x_mask)
 
                 if self.metric_ftns is not None:
                     for met in self.metric_ftns:
                         if met.__name__ == 'bound_eval':
                             self.test_metrics.update(met.__name__,
-                                                     met([x_recon, mu_q_seq, logvar_q_seq],
+                                                     met([x_recon, mu_q_seq, logvar_q_seq, mu_y, logvar_y],
                                                          [x, mu_p_seq, logvar_p_seq], mask=x_mask))
                         if met.__name__ == 'importance_sample':
                             self.test_metrics.update(met.__name__,

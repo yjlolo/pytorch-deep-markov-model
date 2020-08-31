@@ -1,3 +1,4 @@
+import warnings
 import torch
 import torch.nn as nn
 import torch.nn.init as weight_init
@@ -26,13 +27,18 @@ class Emitter(nn.Module):
         A valid probability that parameterizes the
         Bernoulli distribution `p(x_t | z_t)`
     """
-    def __init__(self, z_dim, emission_dim, input_dim):
+    def __init__(self, z_dim, emission_dim, input_dim, y_dim=None):
         super().__init__()
         self.z_dim = z_dim
         self.emission_dim = emission_dim
         self.input_dim = input_dim
+        self.y_dim = y_dim
 
-        self.lin1 = nn.Linear(z_dim, emission_dim)
+        self.input_dim = z_dim
+        if y_dim is not None:
+            self.input_dim += y_dim
+
+        self.lin1 = nn.Linear(self.input_dim, emission_dim)
         self.lin2 = nn.Linear(emission_dim, emission_dim)
         self.lin3 = nn.Linear(emission_dim, input_dim)
         self.act = nn.ReLU()
@@ -138,38 +144,61 @@ class Combiner(nn.Module):
     logvar: tensor (b, z_dim)
         Log-var that parameterizes the variational Gaussian distribution
     """
-    def __init__(self, z_dim, rnn_dim, mean_field=False):
+    def __init__(self, z_dim, rnn_dim, mean_field=False, global_cond_infer=False, y_dim=None):
         super().__init__()
         self.z_dim = z_dim
         self.rnn_dim = rnn_dim
         self.mean_field = mean_field
+        self.global_cond_infer = global_cond_infer
+        self.y_dim = y_dim
+
+        if y_dim is None:
+            warnings.warn("`y_dim == None`, ignoring `global_cond_infer`.")
+        else:
+            if global_cond_infer:
+                self.lin_y_to_h = nn.Linear(y_dim, rnn_dim)
+                self.act_y_to_h = nn.Tanh()
 
         if not mean_field:
-            self.lin1 = nn.Linear(z_dim, rnn_dim)
-            self.act = nn.Tanh()
+            self.lin_z_to_h = nn.Linear(z_dim, rnn_dim)
+            self.act_z_to_h = nn.Tanh()
 
-        self.lin2 = nn.Linear(rnn_dim, z_dim)
-        self.lin_v = nn.Linear(rnn_dim, z_dim)
+        self.h_to_mu = nn.Linear(rnn_dim, z_dim)
+        self.h_to_logvar = nn.Linear(rnn_dim, z_dim)
 
     def init_z_q_0(self, trainable=True):
         return nn.Parameter(torch.zeros(self.z_dim), requires_grad=trainable)
 
-    def forward(self, h_rnn, z_t_1=None, rnn_bidirection=False):
+    def forward(self, h_x, rnn_bidirection=False,
+                z_t_1=None, y=None):
         """
+        h_x: tensor (b, rnn_dim)
         z_t_1: tensor (b, z_dim)
-        h_rnn: tensor (b, rnn_dim)
         """
+        # using simple weighting as in the DMM paper,
+        # can be turned into trainable weights
+        n_terms = 0
+        if rnn_bidirection:
+            _h_comb = h_x[:, :self.rnn_dim] + h_x[:, self.rnn_dim:]
+            n_terms += 2
+        else:
+            _h_comb = h_x
+            n_terms += 1
+
         if not self.mean_field:
             assert z_t_1 is not None
-            h_comb_ = self.act(self.lin1(z_t_1))
-            if rnn_bidirection:
-                h_comb = (1.0 / 3) * (h_comb_ + h_rnn[:, :self.rnn_dim] + h_rnn[:, self.rnn_dim:])
-            else:
-                h_comb = 0.5 * (h_comb_ + h_rnn)
-        else:
-            h_comb = h_rnn
-        mu = self.lin2(h_comb)
-        logvar = self.lin_v(h_comb)
+            _h_comb += self.act_z_to_h(self.lin_z_to_h(z_t_1))
+            n_terms += 1
+
+        if self.global_cond_infer:
+            assert y is not None
+            _h_comb += self.act_y_to_h(self.lin_y_to_h(y))
+            n_terms += 1
+
+        h_comb = (1.0 / n_terms) * _h_comb
+
+        mu = self.h_to_mu(h_comb)
+        logvar = self.h_to_logvar(h_comb)
 
         return mu, logvar
 
@@ -269,3 +298,33 @@ class RnnEncoder(nn.Module):
         else:
             h_rnn, _ = nn.utils.rnn.pad_packed_sequence(_h_rnn, batch_first=True)
         return h_rnn
+
+
+class RnnGlobalEncoder(RnnEncoder):
+    def __init__(self, y_dim, input_dim, rnn_dim, average_pool=True, **kwargs):
+        super().__init__(input_dim, rnn_dim, **kwargs)
+        assert not self.reverse_input
+        self.y_dim = y_dim
+        self.average_pool = average_pool
+        if not average_pool:
+            raise NotImplementedError("Not until making sure about 'indexing the last states of bi-RNN'.")
+        self.gauss_in_dim = self.calculate_effect_dim()
+        self.lin_mu = nn.Linear(self.gauss_in_dim, y_dim)
+        self.lin_logvar = nn.Linear(self.gauss_in_dim, y_dim)
+
+    def forward(self, x, mask=None):
+        _h_rnn, _ = self.rnn(x)
+        h_rnn, _ = nn.utils.rnn.pad_packed_sequence(_h_rnn, batch_first=True)
+        T_MAX = h_rnn.size(1)
+
+        if self.average_pool:
+            if mask is not None:
+                h_rnn = h_rnn * mask.unsqueeze(-1)
+                effect_len = mask.sum(dim=1, keepdim=True)
+            else:
+                effect_len = torch.ones([x.size(0), 1], device=x.device) * T_MAX
+            h_rnn = h_rnn.sum(dim=1).div(effect_len)
+        else:
+            raise NotImplementedError("Not until making sure about 'indexing the last states of bi-RNN'.")
+
+        return self.lin_mu(h_rnn), self.lin_logvar(h_rnn)
