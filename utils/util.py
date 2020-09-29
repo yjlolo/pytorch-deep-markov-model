@@ -28,6 +28,7 @@ def inf_loop(data_loader):
 
 class MetricTracker:
     def __init__(self, *keys, writer=None):
+        self.item = keys
         self.writer = writer
         self._data = pd.DataFrame(index=keys, columns=['total', 'counts', 'average'])
         self.reset()
@@ -47,7 +48,7 @@ class MetricTracker:
         return self._data.average[key]
 
     def result(self):
-        self._data = self._data[self._data.counts != 0]
+        # self._data = self._data[self._data.counts != 0]
         return dict(self._data.average)
 
     def write_to_logger(self, key, value=None):

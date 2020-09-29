@@ -4,25 +4,6 @@ from torch.distributions import Normal
 from model.loss import nll_loss, kl_div
 
 
-def accuracy(output, target):
-    with torch.no_grad():
-        pred = torch.argmax(output, dim=1)
-        assert pred.shape[0] == len(target)
-        correct = 0
-        correct += torch.sum(pred == target).item()
-    return correct / len(target)
-
-
-def top_k_acc(output, target, k=3):
-    with torch.no_grad():
-        pred = torch.topk(output, k, dim=1)[1]
-        assert pred.shape[0] == len(target)
-        correct = 0
-        for i in range(k):
-            correct += torch.sum(pred[:, i] == target).item()
-    return correct / len(target)
-
-
 def nll_metric(output, target, mask):
     assert output.dim() == target.dim() == 3
     assert output.size() == target.size()
@@ -59,7 +40,7 @@ def bound_eval(output, target, mask):
     if mu_y is not None:
         neg_elbo = nll_metric(x_recon, x, mask) + \
             kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p]) + \
-            kl_div_metric([mu_p, logvar_p], mask, target=None)
+            kl_div_metric([mu_y, logvar_y], mask, target=None)
     else:
         neg_elbo = nll_metric(x_recon, x, mask) + \
             kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p])

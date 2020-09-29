@@ -1,33 +1,31 @@
 import warnings
 import torch
 import torch.nn as nn
-from model.modules import Emitter, Transition, Combiner, RnnEncoder, RnnGlobalEncoder
-import data_loader.polyphonic_dataloader as poly
-from data_loader.seq_util import seq_collate_fn, pack_padded_seq
 from base import BaseModel
+from .loss import nll_loss, kl_div
+from .metric import nll_metric, kl_div_metric
+from .modules import Emitter, Transition, Combiner, RnnEncoder, RnnGlobalEncoder
+from data_loader.seq_util import pack_padded_seq
 
 
 class DeepMarkovModel(BaseModel):
-
+    # https://arxiv.org/pdf/1609.09869.pdf
     def __init__(self,
-                 input_dim,
-                 z_dim,
-                 emission_dim,
-                 transition_dim,
-                 rnn_dim,
-                 rnn_type,
-                 rnn_layers,
-                 rnn_bidirection,
-                 orthogonal_init,
-                 use_embedding,
-                 gated_transition,
-                 train_init,
+                 input_dim=88,
+                 z_dim=100,
+                 emission_dim=100,
+                 transition_dim=200,
+                 rnn_dim=600,
+                 rnn_type='lstm',
+                 rnn_layers=1,
+                 rnn_bidirection=False,
+                 orthogonal_init=True,
+                 use_embedding=True,
+                 gated_transition=True,
+                 train_init=False,
                  mean_field=False,
                  reverse_rnn_input=True,
-                 include_global_encoder=False,
-                 global_cond_infer=False,
-                 sample=True,
-                 y_dim=None):
+                 sample_mean=True):
         super().__init__()
         self.input_dim = input_dim
         self.z_dim = z_dim
@@ -37,49 +35,31 @@ class DeepMarkovModel(BaseModel):
         self.rnn_type = rnn_type
         self.rnn_layers = rnn_layers
         self.rnn_bidirection = rnn_bidirection
-        self.use_embedding = use_embedding
         self.orthogonal_init = orthogonal_init
+        self.use_embedding = use_embedding
         self.gated_transition = gated_transition
         self.train_init = train_init
         self.mean_field = mean_field
+        if rnn_bidirection and reverse_rnn_input:
+            reverse_rnn_input = False
+            warnings.warn("`rnn_bidirection==True`, set `reverse_rnn_input` to False to avoid confusion.")
         self.reverse_rnn_input = reverse_rnn_input
-        self.include_global_encoder = include_global_encoder
-        self.global_cond_infer = global_cond_infer
-        self.sample = sample
-        self.y_dim = y_dim
+        self.sample_mean = sample_mean
 
         if use_embedding:
             self.embedding = nn.Linear(input_dim, rnn_dim)
-            rnn_input_dim = rnn_dim
+            self.rnn_input_dim = rnn_dim
         else:
-            rnn_input_dim = input_dim
+            self.rnn_input_dim = input_dim
 
-        # augmentation of a global variable encoder as in
-        # FDMM (https://groups.csail.mit.edu/sls/publications/2019/SameerKhurana_ICASSP-2019.pdf)
-        if include_global_encoder:
-            assert y_dim is not None, "Specify `y_dim` if `include_global_encoder`."
-            self.global_encoder = RnnGlobalEncoder(y_dim, rnn_input_dim, rnn_dim,
-                                                   n_layer=rnn_layers, drop_rate=0.0,
-                                                   bd=True, nonlin='relu',
-                                                   rnn_type=rnn_type,
-                                                   reverse_input=False,
-                                                   average_pool=True)
-        else:
-            warnings.warn("`include_global_encoder == False`, rendering `y_dim = None`.")
-            y_dim = None
-
-        # instantiate components of DMM
         # generative model
-        self.emitter = Emitter(z_dim, emission_dim, input_dim,
-                               y_dim=y_dim)
+        self.emitter = Emitter(z_dim, emission_dim, input_dim)
         self.transition = Transition(z_dim, transition_dim,
                                      gated=gated_transition, identity_init=True)
         # inference model
         self.combiner = Combiner(z_dim, rnn_dim,
-                                 mean_field=mean_field,
-                                 global_cond_infer=global_cond_infer,
-                                 y_dim=y_dim)
-        self.encoder = RnnEncoder(rnn_input_dim, rnn_dim,
+                                 mean_field=mean_field)
+        self.encoder = RnnEncoder(self.rnn_input_dim, rnn_dim,
                                   n_layer=rnn_layers, drop_rate=0.0,
                                   bd=rnn_bidirection, nonlin='relu',
                                   rnn_type=rnn_type,
@@ -95,13 +75,13 @@ class DeepMarkovModel(BaseModel):
         #     self.h_0 = h_0
 
     def reparameterization(self, mu, logvar):
-        if not self.sample:
+        if not self.sample_mean:
             return mu
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, x, x_reversed, x_seq_lengths, x_mask=None):
+    def forward(self, x, x_reversed, x_seq_lengths):
         T_max = x.size(1)
         batch_size = x.size(0)
 
@@ -114,13 +94,6 @@ class DeepMarkovModel(BaseModel):
             input = self.embedding(input)
 
         input = pack_padded_seq(input, x_seq_lengths)
-
-        if self.include_global_encoder:
-            mu_y, logvar_y = self.global_encoder(input, x_mask)
-            y = self.reparameterization(mu_y, logvar_y)
-        else:
-            mu_y, logvar_y = None, None
-            y = None
 
         h_rnn = self.encoder(input, x_seq_lengths)
         z_q_0 = self.z_q_0.expand(batch_size, self.z_dim)
@@ -139,19 +112,14 @@ class DeepMarkovModel(BaseModel):
             # q(z_t | z_{t-1}, x_{t:T})
             mu_q, logvar_q = self.combiner(h_x=h_rnn[:, t, :],
                                            z_t_1=z_prev,
-                                           y=y,
                                            rnn_bidirection=self.rnn_bidirection)
             zt_q = self.reparameterization(mu_q, logvar_q)
             z_prev = zt_q
             # p(z_t | z_{t-1})
-            mu_p, logvar_p = self.transition(z_prev)  # we can also make it p(z_t|z_{t-1}, y)
+            mu_p, logvar_p = self.transition(z_prev)
             zt_p = self.reparameterization(mu_p, logvar_p)
 
-            if y is not None:
-                input_to_emitter = torch.cat([zt_q, y], dim=-1)
-            else:
-                input_to_emitter = zt_q
-            xt_recon = self.emitter(input_to_emitter).contiguous()
+            xt_recon = self.emitter(zt_q).contiguous()
 
             mu_q_seq[:, t, :] = mu_q
             logvar_q_seq[:, t, :] = logvar_q
@@ -166,9 +134,10 @@ class DeepMarkovModel(BaseModel):
         z_p_0 = self.reparameterization(mu_p_0, logvar_p_0)
         z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
 
-        return x_recon, z_q_seq, z_p_seq, \
-            mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq, \
-            mu_y, logvar_y
+        return x_recon, x, \
+            z_q_seq, z_p_seq, \
+            mu_q_seq, mu_p_seq, \
+            logvar_q_seq, logvar_p_seq
 
     def generate(self, batch_size, seq_len):
         mu_p = self.mu_p_0.expand(batch_size, self.z_dim)
@@ -182,16 +151,50 @@ class DeepMarkovModel(BaseModel):
             logvar_p_seq[:, t, :] = logvar_p
             z_p = self.reparameterization(mu_p, logvar_p)
 
-            if self.include_global_encoder:
-                y = self.reparameterization(torch.zeros(batch_size, self.y_dim).to(z_p.device),
-                                            torch.zeros(batch_size, self.y_dim).to(z_p.device))
-                input_to_emitter = torch.cat([z_p, y], dim=-1)
-            else:
-                input_to_emitter = z_p
-
-            xt = self.emitter(input_to_emitter)
+            xt = self.emitter(z_p)
             mu_p, logvar_p = self.transition(z_p)
 
             output_seq[:, t, :] = xt
             z_p_seq[:, t, :] = z_p
         return output_seq, z_p_seq, mu_p_seq, logvar_p_seq
+
+    def loss_function(self, *args, **kwargs):
+        recons, inputs = args[0], args[1]
+        mu_q, mu_p = args[4], args[5]
+        logvar_q, logvar_p = args[6], args[7]
+        kl_weight = kwargs['kl_weight']
+        kl_annealing_factor = kwargs['kl_annealing_factor']
+        mask = kwargs['mask']
+
+        nll_fr = nll_loss(recons, inputs).mean(dim=-1)
+        kl_fr = kl_div(mu_q, logvar_q, mu_p, logvar_p).mean(dim=-1)
+
+        if mask is not None:
+            mask = mask.gt(0).view(-1)
+            kl_m = kl_fr.view(-1).masked_select(mask).mean()
+            nll_m = nll_fr.view(-1).masked_select(mask).mean()
+        else:
+            kl_m = kl_fr.view(-1).mean()
+            nll_m = nll_fr.view(-1).mean()
+
+        loss = kl_annealing_factor * kl_weight * kl_m + nll_m
+
+        return {
+            'loss': loss,
+            'recon_loss': nll_m,
+            'kld': kl_m,
+            'kl_anneal': kl_annealing_factor
+        }
+
+    def calculate_metrics(self, *args, **kwargs):
+        recons, inputs = args[0], args[1]
+        mu_q, mu_p = args[4], args[5]
+        logvar_q, logvar_p = args[6], args[7]
+        mask = kwargs['mask']
+
+        neg_elbo = nll_metric(recons, inputs, mask) + \
+            kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p])
+
+        return {
+            'bound': neg_elbo.sum().div(mask.sum())
+        }
