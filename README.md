@@ -10,9 +10,13 @@ Attempts to PyTorch re-implementatoin of
 ## Usage
 Training the model
 - DMM
+
     python train.py -c configs/dmm.json
+
 - FDMM
+
     python train.py -c configs/fdmm.json
+
 
 Add flag `-i` to specifically name the experiment that is to be saved under `saved/`
 
