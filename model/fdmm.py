@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from base import BaseModel
 from .loss import nll_loss, kl_div
+from .metric import nll_metric, kl_div_metric
 from .modules import Emitter, Transition, Combiner, RnnEncoder, RnnGlobalEncoder
 from .dmm import DeepMarkovModel
 from data_loader.seq_util import pack_padded_seq
@@ -155,8 +156,22 @@ class FactorDeepMarkovModel(DeepMarkovModel):
 
         return {
             'loss': loss,
-            'reconstruction_loss': nll_m,
+            'recon_loss': nll_m,
             'kld': kl_z_m,
             'kld_y': kl_y_fr,
-            'kl_annealing_factor': kl_annealing_factor
+            'kl_anneal': kl_annealing_factor
+        }
+
+    def calculate_metrics(self, *args, **kwargs):
+        recons, inputs = args[0], args[1]
+        mu_q, mu_p, mu_y = args[5], args[6], args[7]
+        logvar_q, logvar_p, logvar_y = args[8], args[9], args[10]
+        mask = kwargs['mask']
+
+        neg_elbo = nll_metric(recons, inputs, mask) + \
+            kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p]) + \
+            kl_div(mu_y, logvar_y).sum(dim=-1, keepdim=True)
+
+        return {
+            'bound': neg_elbo.sum().div(mask.sum())
         }

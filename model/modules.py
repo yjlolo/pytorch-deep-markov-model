@@ -322,9 +322,8 @@ class RnnGlobalEncoder(RnnEncoder):
                 h_rnn = h_rnn * mask.unsqueeze(-1)
                 effect_len = mask.sum(dim=1, keepdim=True)
             else:
-                effect_len = torch.ones([x.size(0), 1], device=x.device) * T_MAX
+                effect_len = torch.ones([h_rnn.size(0), 1], device=h_rnn.device) * T_MAX
             h_rnn = h_rnn.sum(dim=1).div(effect_len)
         else:
             raise NotImplementedError("Not until making sure about 'indexing the last states of bi-RNN'.")
-
         return self.lin_mu(h_rnn), self.lin_logvar(h_rnn)

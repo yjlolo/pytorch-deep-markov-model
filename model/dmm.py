@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from base import BaseModel
 from .loss import nll_loss, kl_div
+from .metric import nll_metric, kl_div_metric
 from .modules import Emitter, Transition, Combiner, RnnEncoder, RnnGlobalEncoder
 from data_loader.seq_util import pack_padded_seq
 
@@ -80,7 +81,7 @@ class DeepMarkovModel(BaseModel):
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, x, x_reversed, x_seq_lengths, x_mask=None):
+    def forward(self, x, x_reversed, x_seq_lengths):
         T_max = x.size(1)
         batch_size = x.size(0)
 
@@ -180,7 +181,20 @@ class DeepMarkovModel(BaseModel):
 
         return {
             'loss': loss,
-            'reconstruction_loss': nll_m,
+            'recon_loss': nll_m,
             'kld': kl_m,
-            'kl_annealing_factor': kl_annealing_factor
+            'kl_anneal': kl_annealing_factor
+        }
+
+    def calculate_metrics(self, *args, **kwargs):
+        recons, inputs = args[0], args[1]
+        mu_q, mu_p = args[4], args[5]
+        logvar_q, logvar_p = args[6], args[7]
+        mask = kwargs['mask']
+
+        neg_elbo = nll_metric(recons, inputs, mask) + \
+            kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p])
+
+        return {
+            'bound': neg_elbo.sum().div(mask.sum())
         }

@@ -40,7 +40,7 @@ def bound_eval(output, target, mask):
     if mu_y is not None:
         neg_elbo = nll_metric(x_recon, x, mask) + \
             kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p]) + \
-            kl_div_metric([mu_p, logvar_p], mask, target=None)
+            kl_div_metric([mu_y, logvar_y], mask, target=None)
     else:
         neg_elbo = nll_metric(x_recon, x, mask) + \
             kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p])

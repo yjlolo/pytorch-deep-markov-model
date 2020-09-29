@@ -47,20 +47,24 @@ class Trainer(BaseTrainer):
                                        self.config['trainer']['anneal_update'],
                                        epoch - 1, self.len_epoch, batch_idx)
 
-        results = self.model(x, x_reversed, x_seq_lengths, x_mask)
-        loss = self.model.loss_function(*results,
-                                        kl_weight=self.config['trainer']['kl_weight'],
-                                        kl_annealing_factor=kl_annealing_factor,
-                                        mask=x_mask)
+        results = self.model(x, x_reversed, x_seq_lengths)
+        losses = self.model.loss_function(*results,
+                                          kl_weight=self.config['trainer']['kl_weight'],
+                                          kl_annealing_factor=kl_annealing_factor,
+                                          mask=x_mask)
+        metrics = self.model.calculate_metrics(*results, mask=x_mask)
 
         if logger is not None:
-            for k, v in loss.items():
+            for k, v in losses.items():
+                logger.update(k, v)
+            for k, v in metrics.items():
                 logger.update(k, v)
         else:
-            # metric logging is not implemented yet
-            logger = MetricTracker(*[k for k in loss.keys()], writer=self.writer)
+            logger = MetricTracker(*[l_i for l_i in losses.keys()],
+                                   *[m_i for m_i in metrics.keys()],
+                                   writer=self.writer)
 
-        return results, loss['loss'], logger
+        return results, losses['loss'], logger
 
     def _train_epoch(self, epoch):
         """
