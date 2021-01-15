@@ -134,7 +134,7 @@ class Trainer(BaseTrainer):
             val_log = self._valid_epoch(epoch)
             log.update(**{'val_' + k: v for k, v in val_log.items()})
 
-        if self.do_test and epoch % 50 == 0:
+        if self.do_test and epoch % self.img_log_interval == 0:
             test_log = self._test_epoch(epoch)
             log.update(**{'test_' + k: v for k, v in test_log.items()})
 
