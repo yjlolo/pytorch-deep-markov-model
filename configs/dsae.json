@@ -1,9 +1,9 @@
 {
-    "name": "FDMM",
+    "name": "DSAE",
     "n_gpu": 1,
 
     "arch": {
-        "type": "FactorDeepMarkovModel",
+        "type": "DisentangledSeqAE",
         "args": {
             "y_dim": 50,
             "avg_pool_global_var": true,

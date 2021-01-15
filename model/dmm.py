@@ -4,7 +4,7 @@ import torch.nn as nn
 from base import BaseModel
 from .loss import nll_loss, kl_div
 from .metric import nll_metric, kl_div_metric
-from .modules import Emitter, Transition, Combiner, RnnEncoder, RnnGlobalEncoder
+from .modules import Emitter, Transition, Combiner, RnnEncoder
 from data_loader.seq_util import pack_padded_seq
 
 
