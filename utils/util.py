@@ -57,3 +57,6 @@ class MetricTracker:
             self.writer.add_scalar(key, self._data.average[key])
         else:
             self.writer.add_scalar(key, value)
+
+def filter_with_ext(dirpath, ext):
+    return list(Path(dirpath).glob(f'*.{ext}'))
