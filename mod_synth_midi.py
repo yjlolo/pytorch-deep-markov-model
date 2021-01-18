@@ -5,7 +5,9 @@ import argparse
 import pretty_midi
 from pretty_midi import constants
 from midi2audio import FluidSynth
+
 from utils import filter_with_ext, ensure_dir
+from global_vars import SAMPLING_RATE 
 
 
 FILE_EXT = 'mid'
@@ -19,7 +21,6 @@ INSTRUMENT_MAP = {
     'se': 'String Ensemble 1',
     'sl': 'Lead 1 (square)'
 }
-SAMPLE_RATE = 16000
 
 
 def main(args):

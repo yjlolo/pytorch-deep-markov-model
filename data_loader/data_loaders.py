@@ -1,5 +1,5 @@
 from base import BaseDataLoader
-import data_loader.polyphonic_dataloader as poly
+import data_loader.polyphonic_dataset as poly
 from data_loader.seq_util import seq_collate_fn
 
 
