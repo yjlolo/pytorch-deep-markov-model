@@ -7,7 +7,7 @@ import librosa
 import torch
 from torch.utils.data import Dataset
 
-from global_vars import SAMPLING_RATE
+from .global_vars import SAMPLING_RATE
 
 
 class MAPSynth(Dataset):
@@ -70,7 +70,7 @@ class MAPSynth(Dataset):
             0, len(audio) - int(self.seq_len) * SAMPLING_RATE
         )
         end = start + int(self.seq_len) * SAMPLING_RATE
-        return audio[start:end + 1]
+        return audio[start:end]
 
 
 if __name__ == '__main__':

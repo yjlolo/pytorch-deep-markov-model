@@ -1,5 +1,8 @@
+import argparse
+
 from base import BaseDataLoader
 import data_loader.polyphonic_dataset as poly
+from data_loader.mapSyn_dataset import MAPSynth
 from data_loader.seq_util import seq_collate_fn
 
 
@@ -25,3 +28,33 @@ class PolyMusicDataLoader(BaseDataLoader):
                          0.0,
                          num_workers,
                          seq_collate_fn)
+
+
+class MAPSynthDataLoader(BaseDataLoader):
+    def __init__(
+        self,
+        batch_size,
+        datasets_path,
+        seq_len='min',
+        shuffle=True,
+        validation_split=0.0,
+        num_workers=1
+    ):
+        self.dataset = MAPSynth(datasets_path, seq_len)
+
+        super().__init__(
+            self.dataset,
+            batch_size,
+            shuffle,
+            validation_split,
+            num_workers
+        )
+
+
+if __name__ == '__main__':
+    args = argparse.ArgumentParser()
+    args.add_argument('-d', '--datasets', nargs='+')
+    args = args.parse_args()
+
+    dl = MAPSynthDataLoader(10, args.datasets)
+    print(next(iter(dl)).size())
