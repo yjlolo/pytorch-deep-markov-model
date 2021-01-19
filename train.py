@@ -26,7 +26,8 @@ def main(config):
         valid_data_loader = config.init_obj('data_loader_valid', module_data)
     except Exception:
         warnings.warn("Validation dataloader not given.")
-        valid_data_loader = None
+        valid_data_loader = data_loader.split_validation()
+        # valid_data_loader = None
     try:
         test_data_loader = config.init_obj('data_loader_test', module_data)
     except Exception:

@@ -60,4 +60,4 @@ if __name__ == '__main__':
 
     dl = MAPSynthDataLoader(10, args.datasets, seq_len=10)
     x_batch, x_rev_batch, mask, x_len = next(iter(dl))
-    # print(x_batch.size(), x_rev_batch.size(), mask.size(), x_len.size())
+    print(x_batch.size(), x_rev_batch.size(), mask.size(), x_len.size())
