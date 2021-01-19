@@ -1,9 +1,14 @@
 import argparse
 
+from torchvision import transforms
+
 from base import BaseDataLoader
 import data_loader.polyphonic_dataset as poly
 from data_loader.mapSyn_dataset import MAPSynth
 from data_loader.seq_util import seq_collate_fn
+from data import (
+    Zscore, ExtractSpectrogram, LogCompress, Clipping, MinMaxNorm
+)
 
 
 class PolyMusicDataLoader(BaseDataLoader):
@@ -40,7 +45,14 @@ class MAPSynthDataLoader(BaseDataLoader):
         validation_split=0.0,
         num_workers=1
     ):
-        self.dataset = MAPSynth(datasets_path, seq_len)
+        trsfm = transforms.Compose([
+            Zscore(),
+            ExtractSpectrogram(),
+            LogCompress(),
+            Clipping(),
+            MinMaxNorm()
+        ])
+        self.dataset = MAPSynth(datasets_path, seq_len, trsfm)
 
         super().__init__(
             self.dataset,
@@ -56,5 +68,5 @@ if __name__ == '__main__':
     args.add_argument('-d', '--datasets', nargs='+')
     args = args.parse_args()
 
-    dl = MAPSynthDataLoader(10, args.datasets)
+    dl = MAPSynthDataLoader(10, args.datasets, seq_len=10)
     print(next(iter(dl)).size())

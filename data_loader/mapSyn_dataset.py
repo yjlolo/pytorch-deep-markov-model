@@ -7,11 +7,11 @@ import librosa
 import torch
 from torch.utils.data import Dataset
 
-from .global_vars import SAMPLING_RATE
+from data.preprocessor import SAMPLING_RATE
 
 
 class MAPSynth(Dataset):
-    def __init__(self, datasets_path, seq_len='min'):
+    def __init__(self, datasets_path, seq_len='min', transform=None):
         self.datasets_path = list(datasets_path)
         self.wav_path = self._gather_file(self.datasets_path, 'wav')
         self.n_files = len(self.wav_path)
@@ -25,6 +25,7 @@ class MAPSynth(Dataset):
             self.seq_len = seq_len
         else:
             self.seq_len = self.min_duration
+        self.transform = transform
             
     def _gather_file(self, datasets_path, ext):
         audio_path = []
@@ -70,7 +71,12 @@ class MAPSynth(Dataset):
             0, len(audio) - int(self.seq_len) * SAMPLING_RATE
         )
         end = start + int(self.seq_len) * SAMPLING_RATE
-        return audio[start:end]
+        x = audio[start:end]
+        
+        if self.transform is None:
+            return x
+        
+        return self.transform(x)
 
 
 if __name__ == '__main__':

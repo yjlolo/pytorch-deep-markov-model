@@ -7,7 +7,7 @@ from pretty_midi import constants
 from midi2audio import FluidSynth
 
 from utils import filter_with_ext, ensure_dir
-from .global_vars import SAMPLING_RATE 
+from data.preprocessor import SAMPLING_RATE 
 
 
 FILE_EXT = 'mid'
