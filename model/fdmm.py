@@ -2,7 +2,7 @@ import warnings
 import torch
 import torch.nn as nn
 from base import BaseModel
-from .loss import nll_loss, kl_div
+from .loss import nll_loss, mse_loss, kl_div
 from .metric import nll_metric, kl_div_metric
 from .modules import Emitter, Transition, Combiner, RnnEncoder, RnnGlobalEncoder
 from .dmm import DeepMarkovModel
@@ -140,7 +140,8 @@ class FactorDeepMarkovModel(DeepMarkovModel):
         kl_annealing_factor = kwargs['kl_annealing_factor']
         mask = kwargs['mask']
 
-        nll_fr = nll_loss(recons, inputs).mean(dim=-1)
+        # nll_fr = nll_loss(recons, inputs).mean(dim=-1)
+        nll_fr = mse_loss(recons, inputs).mean(dim=-1)
         kl_z_fr = kl_div(mu_q, logvar_q, mu_p, logvar_p).mean(dim=-1)
         kl_y_fr = kl_div(mu_y, logvar_y).mean()
 

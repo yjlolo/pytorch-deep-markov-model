@@ -18,3 +18,9 @@ def nll_loss(x_hat, x):
     assert x_hat.dim() == x.dim() == 3
     assert x.size() == x_hat.size()
     return nn.BCEWithLogitsLoss(reduction='none')(x_hat, x)
+
+
+def mse_loss(x_hat, x):
+    assert x_hat.dim() == x.dim() == 3
+    assert x.size() == x_hat.size()
+    return nn.MSELoss(reduction='none')(x_hat, x)
