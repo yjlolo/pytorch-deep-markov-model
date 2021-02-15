@@ -1,7 +1,7 @@
 import time
 import torch
 from torch.distributions import Normal
-from model.loss import nll_loss, kl_div
+from model.loss import nll_loss, mse_loss, kl_div
 
 
 def nll_metric(output, target, mask):
@@ -9,7 +9,8 @@ def nll_metric(output, target, mask):
     assert output.size() == target.size()
     assert mask.dim() == 2
     assert mask.size(1) == output.size(1)
-    loss = nll_loss(output, target)  # (batch_size, time_step, input_dim)
+    # loss = nll_loss(output, target)  # (batch_size, time_step, input_dim)
+    loss = mse_loss(output, target)  # (batch_size, time_step, input_dim)
     loss = mask * loss.sum(dim=-1)  # (batch_size, time_step)
     loss = loss.sum(dim=1, keepdim=True)  # (batch_size, 1)
     return loss
@@ -38,11 +39,11 @@ def bound_eval(output, target, mask):
     x, mu_p, logvar_p = target
     # batch_size = x.size(0)
     if mu_y is not None:
-        neg_elbo = nll_metric(x_recon, x, mask) + \
+        neg_elbo = mse_metric(x_recon, x, mask) + \
             kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p]) + \
             kl_div_metric([mu_y, logvar_y], mask, target=None)
     else:
-        neg_elbo = nll_metric(x_recon, x, mask) + \
+        neg_elbo = mse_metric(x_recon, x, mask) + \
             kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p])
     # tsbn_bound_sum = elbo.div(mask.sum(dim=1, keepdim=True)).sum().div(batch_size)
     bound_sum = neg_elbo.sum().div(mask.sum())
@@ -79,7 +80,8 @@ def importance_sample(batch_idx, model, x, x_reversed, x_seq_lengths, mask, n_sa
         p_dist = Normal(mu_p_seq, logvar_p_seq.exp().sqrt())
         log_qz = q_dist.log_prob(z_q_seq).sum(dim=-1) * mask_tile
         log_pz = p_dist.log_prob(z_q_seq).sum(dim=-1) * mask_tile
-        log_px_z = -1 * nll_loss(x_recon, x_tile).sum(dim=-1) * mask_tile
+        # log_px_z = -1 * nll_loss(x_recon, x_tile).sum(dim=-1) * mask_tile
+        log_px_z = -1 * mse_loss(x_recon, x_tile).sum(dim=-1) * mask_tile
         ll_estimate_ = log_px_z.sum(dim=1, keepdim=True) + \
             log_pz.sum(dim=1, keepdim=True) - \
             log_qz.sum(dim=1, keepdim=True)

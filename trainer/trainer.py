@@ -31,7 +31,7 @@ class Trainer(BaseTrainer):
         self.log_step = int(np.sqrt(data_loader.batch_size))
         self.overfit_single_batch = overfit_single_batch
 
-        self.img_log_interval = 50
+        self.img_log_interval = 10
 
     def _forward_step(self, batch, epoch, batch_idx, logger=None):
         x, x_reversed, x_mask, x_seq_lengths = batch
@@ -156,13 +156,16 @@ class Trainer(BaseTrainer):
 
                 results, loss, logger = self._forward_step(batch, epoch, batch_idx, logger)
 
-            n_sample = 3
-            output_seq, z_p_seq, mu_p_seq, logvar_p_seq = self.model.generate(n_sample, 100)
-            output_seq = torch.sigmoid(output_seq)
-            plt.close()
-            fig, ax = plt.subplots(n_sample, 1, figsize=(10, n_sample * 10))
-            for i in range(n_sample):
-                ax[i].imshow(output_seq[i].T.cpu().detach().numpy(), origin='lower')
+            if epoch % self.img_log_interval == 0:
+                n_sample = 3
+                output_seq, z_p_seq, mu_p_seq, logvar_p_seq = self.model.generate(n_sample, 626)
+                output_seq = torch.sigmoid(output_seq)
+                plt.close()
+                fig, ax = plt.subplots(n_sample, 1, figsize=(10, n_sample * 10))
+                for i in range(n_sample):
+                    ax[i].imshow(output_seq[i].T.cpu().detach().numpy(), origin='lower')
+                self.writer.set_step(epoch, 'test')
+                self.writer.add_figure('generation', fig)
 
 
         # ---------------------------------------------------
@@ -171,10 +174,7 @@ class Trainer(BaseTrainer):
             # log losses
             for l_i in logger.item:
                 logger.write_to_logger(l_i)
-
-            self.writer.set_step(epoch, 'test')
-            self.writer.add_figure('generation', fig)
-       # ---------------------------------------------------
+        # ---------------------------------------------------
 
         if epoch % self.img_log_interval == 0:
             fig = create_reconstruction_figure(results[1], torch.sigmoid(results[0]))
