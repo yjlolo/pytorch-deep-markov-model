@@ -62,13 +62,15 @@ def main(config):
         lr_scheduler = None
     # -------------------------------------------------
 
-    trainer = Trainer(model, optimizer,
-                      config=config,
-                      data_loader=data_loader,
-                      valid_data_loader=valid_data_loader,
-                      test_data_loader=test_data_loader,
-                      lr_scheduler=lr_scheduler,
-                      overfit_single_batch=config['trainer']['overfit_single_batch'])
+    trainer = Trainer(
+        model,
+        optimizer,
+        config=config,
+        data_loader=data_loader,
+        valid_data_loader=valid_data_loader,
+        test_data_loader=test_data_loader,
+        lr_scheduler=lr_scheduler
+    )
 
     trainer.train()
 

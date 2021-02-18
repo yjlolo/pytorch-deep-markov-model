@@ -139,9 +139,16 @@ class FactorDeepMarkovModel(DeepMarkovModel):
         kl_weight = kwargs['kl_weight']
         kl_annealing_factor = kwargs['kl_annealing_factor']
         mask = kwargs['mask']
+        recon_obj = kwargs['recon_obj']
 
-        # nll_fr = nll_loss(recons, inputs).mean(dim=-1)
-        nll_fr = mse_loss(recons, inputs).mean(dim=-1)
+        if recon_obj == 'nll':
+            nll_fr = nll_loss(torch.sigmoid(recons), inputs).mean(dim=-1)
+        elif recon_obj == 'mse':
+            nll_fr = mse_loss(torch.tanh(recons), inputs).mean(dim=-1)
+        else:
+            msg = "Specify `recon_obj` with ['nll', 'mse']."
+            raise NotImplementedError(msg)
+
         kl_z_fr = kl_div(mu_q, logvar_q, mu_p, logvar_p).mean(dim=-1)
         kl_y_fr = kl_div(mu_y, logvar_y).mean()
 
@@ -168,6 +175,15 @@ class FactorDeepMarkovModel(DeepMarkovModel):
         mu_q, mu_p, mu_y = args[5], args[6], args[7]
         logvar_q, logvar_p, logvar_y = args[8], args[9], args[10]
         mask = kwargs['mask']
+        recon_obj = kwargs['recon_obj']
+
+        if recon_obj == 'nll':
+            recons = torch.sigmoid(recons)
+        elif recon_obj == 'mse':
+            recons = torch.tanh(recons)
+        else:
+            msg = "Specify `recon_obj` with ['nll', 'mse']."
+            raise NotImplementedError(msg)
 
         neg_elbo = nll_metric(recons, inputs, mask) + \
             kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p]) + \

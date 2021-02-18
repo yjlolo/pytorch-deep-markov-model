@@ -10,9 +10,11 @@ class Trainer(BaseTrainer):
     """
     Trainer class
     """
-    def __init__(self, model, optimizer, config, data_loader,
-                 valid_data_loader=None, test_data_loader=None,
-                 lr_scheduler=None, len_epoch=None, overfit_single_batch=False):
+    def __init__(
+        self, model, optimizer, config, data_loader,
+        valid_data_loader=None, test_data_loader=None,
+        lr_scheduler=None, len_epoch=None, 
+    ):
         super().__init__(model, optimizer, config)
         self.config = config
         self.data_loader = data_loader
@@ -23,15 +25,19 @@ class Trainer(BaseTrainer):
             # iteration-based training
             self.data_loader = inf_loop(data_loader)
             self.len_epoch = len_epoch
-        self.valid_data_loader = valid_data_loader if not overfit_single_batch else None
-        self.test_data_loader = test_data_loader if not overfit_single_batch else None
+        self.overfit_single_batch = config['trainer']['overfit_single_batch']
+        self.valid_data_loader = \
+            valid_data_loader if not self.overfit_single_batch else None
         self.do_validation = self.valid_data_loader is not None
+        self.test_data_loader = \
+            test_data_loader if not self.overfit_single_batch else None
         self.do_test = self.test_data_loader is not None
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
-        self.overfit_single_batch = overfit_single_batch
 
-        self.img_log_interval = 10
+        self.img_log_interval = config['trainer']['img_log_interval']
+        self.recon_obj = config['trainer']['recon_obj']
+        assert self.recon_obj in ['mse', 'nll']
 
     def _forward_step(self, batch, epoch, batch_idx, logger=None):
         x, x_reversed, x_mask, x_seq_lengths = batch
@@ -42,17 +48,24 @@ class Trainer(BaseTrainer):
         x_seq_lengths = x_seq_lengths.to(self.device)
 
         # not all models need this, to be refractored
-        kl_annealing_factor = \
-            determine_annealing_factor(self.config['trainer']['min_anneal_factor'],
-                                       self.config['trainer']['anneal_update'],
-                                       epoch - 1, self.len_epoch, batch_idx)
+        kl_annealing_factor = determine_annealing_factor(
+            self.config['trainer']['min_anneal_factor'],
+            self.config['trainer']['anneal_update'],
+            epoch - 1, self.len_epoch, batch_idx
+        )
 
         results = self.model(x, x_reversed, x_seq_lengths)
-        losses = self.model.loss_function(*results,
-                                          kl_weight=self.config['trainer']['kl_weight'],
-                                          kl_annealing_factor=kl_annealing_factor,
-                                          mask=x_mask)
-        metrics = self.model.calculate_metrics(*results, mask=x_mask)
+        losses = self.model.loss_function(
+            *results,
+            kl_weight=self.config['trainer']['kl_weight'],
+            kl_annealing_factor=kl_annealing_factor,
+            mask=x_mask,
+            recon_obj=self.recon_obj
+        )
+
+        metrics = self.model.calculate_metrics(
+            *results, mask=x_mask, recon_obj=self.recon_obj
+        )
 
         if logger is not None:
             for k, v in losses.items():
@@ -193,7 +206,15 @@ class Trainer(BaseTrainer):
 
             n_sample = 3
             output_seq, z_p_seq, mu_p_seq, logvar_p_seq = self.model.generate(n_sample, 100)
-            output_seq = torch.sigmoid(output_seq)
+
+            if self.recon_obj == 'nll':
+                output_seq = torch.sigmoid(output_seq)
+            elif self.recon_obj == 'mse':
+                output_seq = torch.tanh(output_seq)
+            else:
+                msg = "Specify `recon_obj` with ['nll', 'mse']."
+                raise NotImplementedError(msg)
+
             plt.close()
             fig, ax = plt.subplots(n_sample, 1, figsize=(10, n_sample * 10))
             for i in range(n_sample):

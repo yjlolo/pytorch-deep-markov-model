@@ -29,7 +29,12 @@
         "type": "MAPSynthDataLoader",
         "args":{
             "batch_size": 20,
-            "datasets_path": ["data/A-MAPS_1.2-OrchestralHarp", "data/A-MAPS_1.2-Trumpet/", "data/A-MAPS_1.2-AcousticGrandPiano/", "data/A-MAPS_1.2-StringEnsemble1/"],
+            "datasets_path": [
+                "data/A-MAPS_1.2-OrchestralHarp", 
+                "data/A-MAPS_1.2-Trumpet/", 
+                "data/A-MAPS_1.2-AcousticGrandPiano/", 
+                "data/A-MAPS_1.2-StringEnsemble1/"
+            ],
             "seq_len": 10,
             "shuffle": true,
             "num_workers": 1,

@@ -15,23 +15,23 @@ from data import (
 
 
 class MAPSynth(Dataset):
-    def __init__(self, datasets_path, seq_len='min'):
+    def __init__(self, datasets_path, seq_len='min', rand_seg=True):
         self.datasets_path = list(datasets_path)
-        self.wav_path = self._gather_file(self.datasets_path, 'wav')
+        self.wav_path = sorted(self._gather_file(self.datasets_path, 'wav'))
         self.n_files = len(self.wav_path)
-        pt_path = self._gather_file(self.datasets_path, 'pt')
+        self.pt_path = sorted(self._gather_file(self.datasets_path, 'pt'))
         msg = "No WAV files found, run `mod_synth_midi.py` first."
         assert self.n_files > 0, msg
-        self.pt_files = self._load_pt(pt_path)
+        self.pt_files = self._load_pt(self.pt_path)
         self.min_duration = self._check_min_dur(self.pt_files)
         if seq_len != 'min':
             assert seq_len <= self.min_duration
             self.seq_len = seq_len
         else:
             self.seq_len = self.min_duration
+        self.rand_seg = rand_seg
 
         self.transform = transforms.Compose([
-            Zscore(),
             ExtractSpectrogram(),
             LogCompress(),
             Clipping(),
@@ -53,7 +53,10 @@ class MAPSynth(Dataset):
             print("Creating and saving PT files ...")
             return self._load_wav()
         else:
-            return [torch.load(f) for f in file_path]
+            try:
+                return [torch.load(f) for f in file_path]
+            except RuntimeError:
+                return [torch.jit.load(f) for f in file_path]
     
     def _load_wav(self):
         audio_pt = []
@@ -78,13 +81,17 @@ class MAPSynth(Dataset):
 
     def __getitem__(self, idx):
         audio = self.pt_files[idx]
-        start = random.randint(
-            0, len(audio) - int(self.seq_len) * SAMPLING_RATE
-        )
+        if self.rand_seg:
+            start = random.randint(
+                0, len(audio) - int(self.seq_len) * SAMPLING_RATE
+            )
+        else:
+            start = 0
         end = start + int(self.seq_len) * SAMPLING_RATE
-        x = self.transform(audio[start:end]).squeeze(0)
+        x = Zscore()(audio[start:end])
+        S = self.transform(x).squeeze(0)
 
-        return idx, x.transpose(0, -1), x.size(-1)
+        return idx, S.transpose(0, -1), S.size(-1)
 
 
 if __name__ == '__main__':
