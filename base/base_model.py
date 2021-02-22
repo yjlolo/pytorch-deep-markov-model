@@ -16,6 +16,13 @@ class BaseModel(nn.Module):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def loss_function(self, *inputs, **kwargs):
+        raise NotImplementedError
+
+    def calculate_metrics(self, *inputs, **kwargs):
+        raise NotImplementedError
+
     def __str__(self):
         """
         Model prints with number of trainable parameters

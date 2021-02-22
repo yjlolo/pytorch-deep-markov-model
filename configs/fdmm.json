@@ -1,25 +1,28 @@
 {
-    "name": "DMM_rnn",
+    "name": "FDMM",
     "n_gpu": 1,
 
     "arch": {
-        "type": "DeepMarkovModel",
+        "type": "FactorDeepMarkovModel",
         "args": {
+            "y_dim": 50,
+            "avg_pool_global_var": true,
+            "global_var_cond_infer": true,
             "input_dim": 88,
-            "z_dim": 100,
+            "z_dim": 50,
             "emission_dim": 100,
             "transition_dim": 200,
             "rnn_dim": 600,
             "rnn_type": "lstm",
             "rnn_layers": 1,
             "rnn_bidirection": false,
-            "use_embedding": true,
             "orthogonal_init": true,
-	    "gated_transition": true,
+            "use_embedding": true,
+            "gated_transition": true,
             "train_init": false,
             "mean_field": false,
             "reverse_rnn_input": true,
-            "sample": true 
+            "sample_mean": true
         }
     },
     "data_loader_train": {
@@ -46,7 +49,8 @@
         "type": "PolyMusicDataLoader",
         "args":{
             "batch_size": 20,
-            "data_dir": "jsb",
+            "data_dir": 
+            "jsb",
             "split": "test",
             "shuffle": false,
             "num_workers": 1
@@ -61,10 +65,6 @@
             "betas": [0.9, 0.999]
         }
     },
-    "loss": "dmm_loss",
-    "metrics": [
-        "bound_eval", "importance_sample"
-    ],
     "trainer": {
         "epochs": 3000,
         "overfit_single_batch": false,
@@ -78,6 +78,7 @@
 
         "tensorboard": true,
 
+        "kl_weight": 0.0,
         "min_anneal_factor": 0.0,
         "anneal_update": 5000
     }

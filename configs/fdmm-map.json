@@ -1,0 +1,73 @@
+{
+    "name": "FDMM",
+    "n_gpu": 1,
+
+    "arch": {
+        "type": "FactorDeepMarkovModel",
+        "args": {
+            "y_dim": 50,
+            "avg_pool_global_var": true,
+            "global_var_cond_infer": true,
+            "input_dim": 80,
+            "z_dim": 20,
+            "emission_dim": 100,
+            "transition_dim": 200,
+            "rnn_dim": 600,
+            "rnn_type": "lstm",
+            "rnn_layers": 1,
+            "rnn_bidirection": false,
+            "orthogonal_init": true,
+            "use_embedding": true,
+            "gated_transition": true,
+            "train_init": false,
+            "mean_field": false,
+            "reverse_rnn_input": true,
+            "sample_mean": true
+        }
+    },
+    "data_loader_train": {
+        "type": "MAPSynthDataLoader",
+        "args":{
+            "batch_size": 20,
+            "datasets_path": [
+                "data/A-MAPS_1.2-OrchestralHarp", 
+                "data/A-MAPS_1.2-Trumpet/", 
+                "data/A-MAPS_1.2-AcousticGrandPiano/", 
+                "data/A-MAPS_1.2-StringEnsemble1/"
+            ],
+            "seq_len": 5,
+            "shuffle": true,
+            "num_workers": 1,
+            "validation_split": 0.2
+        }
+    },
+    "optimizer": {
+        "type": "Adam",
+        "args":{
+            "lr": 0.0008,
+            "weight_decay": 0.0,
+            "amsgrad": true,
+            "betas": [0.9, 0.999]
+        }
+    },
+    "trainer": {
+        "epochs": 3000,
+        "overfit_single_batch": false,
+
+        "save_dir": "saved/",
+        "save_period": 500,
+        "verbosity": 2,
+        
+        "recon_obj": "mse",
+        "monitor": "min val_loss",
+        "early_stop": 500,
+
+        "tensorboard": true,
+        "img_log_interval": 10,
+
+        "kl_weight": 1.0,
+        "min_anneal_factor": 0.0,
+        "anneal_update": 1000
+    }
+}
+
