@@ -37,7 +37,18 @@ class Trainer(BaseTrainer):
 
         self.img_log_interval = config['trainer']['img_log_interval']
         self.recon_obj = config['trainer']['recon_obj']
+        self.seq_len = config['data_loader_train']['args']['seq_len']
         assert self.recon_obj in ['mse', 'nll']
+
+    def _post_process_output(self, output_seq):
+        if self.recon_obj == 'nll':
+                output_seq = torch.sigmoid(output_seq)
+        elif self.recon_obj == 'mse':
+            output_seq = torch.tanh(output_seq)
+        else:
+            msg = "Specify `recon_obj` with ['nll', 'mse']."
+            raise NotImplementedError(msg)
+        return output_seq
 
     def _forward_step(self, batch, epoch, batch_idx, logger=None):
         x, x_reversed, x_mask, x_seq_lengths = batch
@@ -63,19 +74,21 @@ class Trainer(BaseTrainer):
             recon_obj=self.recon_obj
         )
 
-        metrics = self.model.calculate_metrics(
-            *results, mask=x_mask, recon_obj=self.recon_obj
-        )
+        # metrics = self.model.calculate_metrics(
+        #     *results, mask=x_mask, recon_obj=self.recon_obj
+        # )
 
-        if logger is not None:
-            for k, v in losses.items():
-                logger.update(k, v)
-            for k, v in metrics.items():
-                logger.update(k, v)
-        else:
-            logger = MetricTracker(*[l_i for l_i in losses.keys()],
-                                   *[m_i for m_i in metrics.keys()],
-                                   writer=self.writer)
+        if logger is None:
+            logger = MetricTracker(
+                *[l_i for l_i in losses.keys()],
+                # *[m_i for m_i in metrics.keys()],
+                writer=self.writer
+            )
+
+        for k, v in losses.items():
+            logger.update(k, v)
+        # for k, v in metrics.items():
+        #     logger.update(k, v)
 
         return results, losses['loss'], logger
 
@@ -98,7 +111,8 @@ class Trainer(BaseTrainer):
 
         for batch_idx, batch in enumerate(self.data_loader):
 
-            results, loss, logger = self._forward_step(batch, epoch, batch_idx, logger)
+            results, loss, logger = \
+                self._forward_step(batch, epoch, batch_idx, logger)
             self.optimizer.zero_grad()
             loss.backward()
 
@@ -114,10 +128,11 @@ class Trainer(BaseTrainer):
             self.optimizer.step()
 
             if batch_idx % self.log_step == 0:
-                self.logger.debug('Train Epoch: {} {} Loss: {:.6f}'.format(
-                    epoch,
-                    self._progress(batch_idx),
-                    loss.item()))
+                self.logger.debug(
+                    'Train Epoch: {} {} Loss: {:.6f}'.format(
+                        epoch, self._progress(batch_idx), loss.item()
+                    )
+                )
 
             if batch_idx == self.len_epoch or self.overfit_single_batch:
                 break
@@ -137,7 +152,9 @@ class Trainer(BaseTrainer):
         # ---------------------------------------------------
 
         if epoch % self.img_log_interval == 0:
-            fig = create_reconstruction_figure(results[1], torch.sigmoid(results[0]))
+            fig = create_reconstruction_figure(
+                results[1], self._post_process_output(results[0])
+            )
             self.writer.set_step(epoch, 'train')
             self.writer.add_figure('reconstruction', fig)
 
@@ -171,8 +188,9 @@ class Trainer(BaseTrainer):
 
             if epoch % self.img_log_interval == 0:
                 n_sample = 3
-                output_seq, z_p_seq, mu_p_seq, logvar_p_seq = self.model.generate(n_sample, 626)
-                output_seq = torch.sigmoid(output_seq)
+                output_seq, z_p_seq, mu_p_seq, logvar_p_seq = \
+                    self.model.generate(n_sample, self.seq_len)
+                output_seq = self._post_process_output(output_seq)
                 plt.close()
                 fig, ax = plt.subplots(n_sample, 1, figsize=(10, n_sample * 10))
                 for i in range(n_sample):
@@ -190,7 +208,7 @@ class Trainer(BaseTrainer):
         # ---------------------------------------------------
 
         if epoch % self.img_log_interval == 0:
-            fig = create_reconstruction_figure(results[1], torch.sigmoid(results[0]))
+            fig = create_reconstruction_figure(results[1], results[0])
             self.writer.set_step(epoch, 'valid')
             self.writer.add_figure('reconstruction', fig)
 
@@ -202,18 +220,14 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             for batch_idx, batch in enumerate(self.test_data_loader):
 
-                results, loss, logger = self._forward_step(batch, epoch, batch_idx, logger)
+                results, loss, logger = self._forward_step(
+                    batch, epoch, batch_idx, logger
+                )
 
             n_sample = 3
-            output_seq, z_p_seq, mu_p_seq, logvar_p_seq = self.model.generate(n_sample, 100)
-
-            if self.recon_obj == 'nll':
-                output_seq = torch.sigmoid(output_seq)
-            elif self.recon_obj == 'mse':
-                output_seq = torch.tanh(output_seq)
-            else:
-                msg = "Specify `recon_obj` with ['nll', 'mse']."
-                raise NotImplementedError(msg)
+            output_seq, z_p_seq, mu_p_seq, logvar_p_seq = \
+                self.model.generate(n_sample, 100)
+            output_seq = self._post_process_output(output_seq)
 
             plt.close()
             fig, ax = plt.subplots(n_sample, 1, figsize=(10, n_sample * 10))

@@ -10,22 +10,24 @@ from data_loader.seq_util import pack_padded_seq
 
 class DeepMarkovModel(BaseModel):
     # https://arxiv.org/pdf/1609.09869.pdf
-    def __init__(self,
-                 input_dim=88,
-                 z_dim=100,
-                 emission_dim=100,
-                 transition_dim=200,
-                 rnn_dim=600,
-                 rnn_type='lstm',
-                 rnn_layers=1,
-                 rnn_bidirection=False,
-                 orthogonal_init=True,
-                 use_embedding=True,
-                 gated_transition=True,
-                 train_init=False,
-                 mean_field=False,
-                 reverse_rnn_input=True,
-                 sample_mean=True):
+    def __init__(
+        self,
+        input_dim=88,
+        z_dim=100,
+        emission_dim=100,
+        transition_dim=200,
+        rnn_dim=600,
+        rnn_type='lstm',
+        rnn_layers=1,
+        rnn_bidirection=False,
+        orthogonal_init=True,
+        use_embedding=True,
+        gated_transition=True,
+        train_init=False,
+        mean_field=False,
+        reverse_rnn_input=True,
+        sample_mean=True
+    ):
         super().__init__()
         self.input_dim = input_dim
         self.z_dim = z_dim
@@ -42,7 +44,10 @@ class DeepMarkovModel(BaseModel):
         self.mean_field = mean_field
         if rnn_bidirection and reverse_rnn_input:
             reverse_rnn_input = False
-            warnings.warn("`rnn_bidirection==True`, set `reverse_rnn_input` to False to avoid confusion.")
+            warnings.warn(
+                "`rnn_bidirection==True`, ignore and set \
+                 `reverse_rnn_input` to False"
+            )
         self.reverse_rnn_input = reverse_rnn_input
         self.sample_mean = sample_mean
 
@@ -54,25 +59,22 @@ class DeepMarkovModel(BaseModel):
 
         # generative model
         self.emitter = Emitter(z_dim, emission_dim, input_dim)
-        self.transition = Transition(z_dim, transition_dim,
-                                     gated=gated_transition, identity_init=True)
+        self.transition = Transition(
+            z_dim, transition_dim, gated=gated_transition, identity_init=True
+        )
         # inference model
-        self.combiner = Combiner(z_dim, rnn_dim,
-                                 mean_field=mean_field)
-        self.encoder = RnnEncoder(self.rnn_input_dim, rnn_dim,
-                                  n_layer=rnn_layers, drop_rate=0.0,
-                                  bd=rnn_bidirection, nonlin='relu',
-                                  rnn_type=rnn_type,
-                                  reverse_input=reverse_rnn_input)
+        self.combiner = Combiner(z_dim, rnn_dim, mean_field=mean_field)
+        self.encoder = RnnEncoder(
+            self.rnn_input_dim, rnn_dim, 
+            n_layer=rnn_layers, drop_rate=0.0,
+            bd=rnn_bidirection, nonlin='relu', 
+            rnn_type=rnn_type, reverse_input=reverse_rnn_input
+        )
 
         # initialize hidden states
-        self.mu_p_0, self.logvar_p_0 = self.transition.init_z_0(trainable=train_init)
+        self.mu_p_0, self.logvar_p_0 = \
+            self.transition.init_z_0(trainable=train_init)
         self.z_q_0 = self.combiner.init_z_q_0(trainable=train_init)
-        # h_0 = self.encoder.init_hidden(trainable=train_init)
-        # if self.encoder.rnn_type == 'lstm':
-        #     self.h_0, self.c_0 = h_0
-        # else:
-        #     self.h_0 = h_0
 
     def reparameterization(self, mu, logvar):
         if not self.sample_mean:
@@ -110,9 +112,10 @@ class DeepMarkovModel(BaseModel):
         z_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
-            mu_q, logvar_q = self.combiner(h_x=h_rnn[:, t, :],
-                                           z_t_1=z_prev,
-                                           rnn_bidirection=self.rnn_bidirection)
+            mu_q, logvar_q = self.combiner(
+                h_x=h_rnn[:, t, :], z_t_1=z_prev,
+                rnn_bidirection=self.rnn_bidirection
+            )
             zt_q = self.reparameterization(mu_q, logvar_q)
             z_prev = zt_q
             # p(z_t | z_{t-1})

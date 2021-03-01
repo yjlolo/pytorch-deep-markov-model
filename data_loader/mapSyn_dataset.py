@@ -18,20 +18,27 @@ class MAPSynth(Dataset):
     def __init__(self, datasets_path, seq_len='min', rand_seg=True):
         self.datasets_path = list(datasets_path)
         self.wav_path = sorted(self._gather_file(self.datasets_path, 'wav'))
+
         self.n_files = len(self.wav_path)
-        self.pt_path = sorted(self._gather_file(self.datasets_path, 'pt'))
         msg = "No WAV files found, run `mod_synth_midi.py` first."
+        # TODO: abstract `mod_synth_midi.py` and enable execution here without
+        # spiting the assertion error
         assert self.n_files > 0, msg
+
+        self.pt_path = sorted(self._gather_file(self.datasets_path, 'pt'))
         self.pt_files = self._load_pt(self.pt_path)
+
         self.min_duration = self._check_min_dur(self.pt_files)
         if seq_len != 'min':
-            assert seq_len <= self.min_duration
+            msg = "`seq_len` should be shorter than the minimum duration."
+            assert seq_len <= self.min_duration, msg
             self.seq_len = seq_len
         else:
             self.seq_len = self.min_duration
         self.rand_seg = rand_seg
 
         self.transform = transforms.Compose([
+            Zscore(),
             ExtractSpectrogram(),
             LogCompress(),
             Clipping(),
@@ -83,13 +90,12 @@ class MAPSynth(Dataset):
         audio = self.pt_files[idx]
         if self.rand_seg:
             start = random.randint(
-                0, len(audio) - int(self.seq_len) * SAMPLING_RATE
+                0, len(audio) - int(self.seq_len * SAMPLING_RATE)
             )
         else:
             start = 0
-        end = start + int(self.seq_len) * SAMPLING_RATE
-        x = Zscore()(audio[start:end])
-        S = self.transform(x).squeeze(0)
+        end = start + int(self.seq_len * SAMPLING_RATE)
+        S = self.transform(audio[start:end]).squeeze(0)
 
         return idx, S.transpose(0, -1), S.size(-1)
 

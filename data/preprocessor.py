@@ -41,7 +41,7 @@ class Clipping():
 
     def __call__(self, x):
         x[x <= self.clip_min] = self.clip_min
-        # x[x >= self.clip_max] = self.clip_max
+        x[x >= self.clip_max] = self.clip_max
         return x
 
 
