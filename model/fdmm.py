@@ -6,6 +6,7 @@ from .loss import nll_loss, mse_loss, kl_div
 from .metric import nll_metric, kl_div_metric
 from .modules import Emitter, Transition, Combiner, RnnEncoder, RnnGlobalEncoder
 from .dmm import DeepMarkovModel
+from .loss import post_process_output
 from data_loader.seq_util import pack_padded_seq
 
 
@@ -23,7 +24,7 @@ class FactorDeepMarkovModel(DeepMarkovModel):
         self.avg_pool_global_var = avg_pool_global_var
         self.global_var_cond_infer = global_var_cond_infer
 
-        # encoder for global latent variables
+        # q(y|x)
         self.global_encoder = RnnGlobalEncoder(
             y_dim, self.rnn_input_dim, self.rnn_dim,
             n_layer=self.rnn_layers, drop_rate=0.0,
@@ -32,56 +33,77 @@ class FactorDeepMarkovModel(DeepMarkovModel):
             reverse_input=False,
             average_pool=avg_pool_global_var
         )
-        # generative model
+        # p(x_t|z_t, y)
         self.emitter = Emitter(
             self.z_dim, self.emission_dim, self.input_dim, y_dim=self.y_dim
         )
+        # p(z_t|z_{t-1})
         self.transition = Transition(
             self.z_dim, self.transition_dim,
             gated=self.gated_transition, identity_init=True
         )
-        # inference model
+        # q(z_t|z_{t-1}, x, y)
+        # Note that dependency on x can be imlemented differently
+        # we follow x_{>=t}, whose information is carried through h_{>=t},
+        # the hidden state of a RNN
         self.combiner = Combiner(
             self.z_dim, self.rnn_dim,
             mean_field=self.mean_field,
             global_var_cond_infer=global_var_cond_infer,
             y_dim=y_dim
         )
+        # h_{>=t} = f(x_{>=t}), where f is implemented as a RNN
         self.encoder = RnnEncoder(
             self.rnn_input_dim, self.rnn_dim,
             n_layer=self.rnn_layers, drop_rate=0.0,
             bd=self.rnn_bidirection, nonlin='relu',
             rnn_type=self.rnn_type, reverse_input=self.reverse_rnn_input
         )
-
-        # initialize hidden states
+        # Initialize hidden states
         self.mu_p_0, self.logvar_p_0 = \
             self.transition.init_z_0(trainable=self.train_init)
         self.z_q_0 = self.combiner.init_z_q_0(trainable=self.train_init)
+    
+    def encode_global(self, input, mask):
+        mu, logvar = self.global_encoder(input, mask)
+        z = self.reparameterization(mu, logvar)
+        return mu, logvar, z
+
+    def encode_local(self, input, z_prev, y):
+        mu, logvar = self.combiner(
+            h_x=input[:, t, :], z_t_1=z_prev, y=y, self.rnn_bidirection
+        )
+        z_t = self.reparameterization(mu, logvar)
+        return mu, logvar, z_t
+
+    def prior_transition(self, input):
+        mu, logvar = self.transition(input)  
+        z_t = self.reparameterization(mu, logvar)
+        return mu, logvar, z_t
+
+    def decode(self, z_t, y):
+        x_t_recon = self.emitter(torch.cat([z_t, y], dim=-1)).contiguous()
+        return x_t_recon
 
     def forward(self, x, x_reversed, x_seq_lengths, x_mask=None):
         T_max = x.size(1)
         batch_size = x.size(0)
 
-        if self.encoder.reverse_input:
-            input = x_reversed
-        else:
-            input = x
-
-        if self.use_embedding:
-            input = self.embedding(input)
-
         input = pack_padded_seq(input, x_seq_lengths)
 
-        mu_y, logvar_y = self.global_encoder(input, x_mask)
-        y = self.reparameterization(mu_y, logvar_y)
+        # Encode the global latent variable
+        mu_y, logvar_y, y = self.encode_global(input, x_mask)
 
+        # Encode information from the input sequence
         h_rnn = self.encoder(input, x_seq_lengths)
+
+        # Configure initial states
         z_q_0 = self.z_q_0.expand(batch_size, self.z_dim)
-        mu_p_0 = self.mu_p_0.expand(batch_size, 1, self.z_dim)
-        logvar_p_0 = self.logvar_p_0.expand(batch_size, 1, self.z_dim)
+        mu_p_0 = self.mu_p_0.expand(batch_size, self.z_dim)
+        logvar_p_0 = self.logvar_p_0.expand(batch_size, self.z_dim)
         z_prev = z_q_0
 
+        # Create placeholders
         x_recon = torch.zeros([batch_size, T_max, self.input_dim]).to(x.device)
         mu_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         logvar_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
@@ -89,22 +111,18 @@ class FactorDeepMarkovModel(DeepMarkovModel):
         logvar_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         z_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
         z_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
+
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})
-            mu_q, logvar_q = self.combiner(
-                h_x=h_rnn[:, t, :],
-                z_t_1=z_prev,
-                y=y,
-                rnn_bidirection=self.rnn_bidirection
-            )
-            zt_q = self.reparameterization(mu_q, logvar_q)
+            mu_q, logvar_q, zt_q = self.encode_local(h_rnn[:, t, :], z_prev, y)
             z_prev = zt_q
+
             # p(z_t | z_{t-1})
             # TODO: might want to try p(z_t|z_{t-1}, y)
-            mu_p, logvar_p = self.transition(z_prev)  
-            zt_p = self.reparameterization(mu_p, logvar_p)
+            mu_p, logvar_p, zt_p = self.prior_transition(z_prev)
 
-            xt_recon = self.emitter(torch.cat([zt_q, y], dim=-1)).contiguous()
+            # p(x | z_t, y)
+            xt_recon = self.decode(zt_q, y)
 
             mu_q_seq[:, t, :] = mu_q
             logvar_q_seq[:, t, :] = logvar_q
@@ -114,10 +132,12 @@ class FactorDeepMarkovModel(DeepMarkovModel):
             z_p_seq[:, t, :] = zt_p
             x_recon[:, t, :] = xt_recon
 
-        mu_p_seq = torch.cat([mu_p_0, mu_p_seq[:, :-1, :]], dim=1)
-        logvar_p_seq = torch.cat([logvar_p_0, logvar_p_seq[:, :-1, :]], dim=1)
+        mu_p_seq = torch.cat([mu_p_0.unsqueeze(1), mu_p_seq[:, :-1, :]], dim=1)
+        logvar_p_seq = torch.cat(
+            [logvar_p_0.unsqueeze(1), logvar_p_seq[:, :-1, :]], dim=1
+        )
         z_p_0 = self.reparameterization(mu_p_0, logvar_p_0)
-        z_p_seq = torch.cat([z_p_0, z_p_seq[:, :-1, :]], dim=1)
+        z_p_seq = torch.cat([z_p_0.unsqueeze(1), z_p_seq[:, :-1, :]], dim=1)
 
         return x_recon, x, \
             z_q_seq, z_p_seq, y, \
@@ -127,9 +147,7 @@ class FactorDeepMarkovModel(DeepMarkovModel):
     def generate(self, batch_size, seq_len):
         mu_p = self.mu_p_0.expand(batch_size, self.z_dim)
         logvar_p = self.logvar_p_0.expand(batch_size, self.z_dim)
-        z_p_seq = torch.zeros(
-            [batch_size, seq_len, self.z_dim]
-        ).to(mu_p.device)
+        z_p_seq = torch.zeros([batch_size, seq_len, self.z_dim]).to(mu_p.device)
         mu_p_seq = torch.zeros(
             [batch_size, seq_len, self.z_dim]
         ).to(mu_p.device)
@@ -140,6 +158,7 @@ class FactorDeepMarkovModel(DeepMarkovModel):
             [batch_size, seq_len, self.input_dim]
         ).to(mu_p.device)
 
+        # Sample a global latent variable
         y = self.reparameterization(
             torch.zeros(batch_size, self.y_dim).to(mu_p.device),
             torch.zeros(batch_size, self.y_dim).to(mu_p.device)
@@ -148,13 +167,17 @@ class FactorDeepMarkovModel(DeepMarkovModel):
         for t in range(seq_len):
             mu_p_seq[:, t, :] = mu_p
             logvar_p_seq[:, t, :] = logvar_p
+
+            # Sample a local latent variable
             z_p = self.reparameterization(mu_p, logvar_p)
 
-            xt = self.emitter(torch.cat([z_p, y], dim=-1))
+            # Reconstruct and transit
+            xt = self.decode(z_p, y)
             mu_p, logvar_p = self.transition(z_p)
 
             output_seq[:, t, :] = xt
             z_p_seq[:, t, :] = z_p
+
         return output_seq, z_p_seq, mu_p_seq, logvar_p_seq
 
     def loss_function(self, *args, **kwargs):
@@ -166,13 +189,8 @@ class FactorDeepMarkovModel(DeepMarkovModel):
         mask = kwargs['mask']
         recon_obj = kwargs['recon_obj']
 
-        if recon_obj == 'nll':
-            nll_fr = nll_loss(torch.sigmoid(recons), inputs).mean(dim=-1)
-        elif recon_obj == 'mse':
-            nll_fr = mse_loss(torch.tanh(recons), inputs).mean(dim=-1)
-        else:
-            msg = "Specify `recon_obj` with ['nll', 'mse']."
-            raise NotImplementedError(msg)
+        recons, recon_loss_f = post_process_output(recons, recon_obj)
+        nll_fr = recon_loss_f(recons, inputs).mean(dim=-1)
 
         kl_z_fr = kl_div(mu_q, logvar_q, mu_p, logvar_p).mean(dim=-1)
         kl_y_fr = kl_div(mu_y, logvar_y).mean(dim=-1).mean()
@@ -203,13 +221,7 @@ class FactorDeepMarkovModel(DeepMarkovModel):
         mask = kwargs['mask']
         recon_obj = kwargs['recon_obj']
 
-        if recon_obj == 'nll':
-            recons = torch.sigmoid(recons)
-        elif recon_obj == 'mse':
-            recons = torch.tanh(recons)
-        else:
-            msg = "Specify `recon_obj` with ['nll', 'mse']."
-            raise NotImplementedError(msg)
+        recons, _ = post_process_output(recons, recon_obj)
 
         neg_elbo = nll_metric(recons, inputs, mask) + \
             kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p]) + \

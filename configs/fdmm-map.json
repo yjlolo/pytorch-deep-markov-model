@@ -1,5 +1,5 @@
 {
-    "name": "FDMM-seq=5-kl=0.01-z=4",
+    "name": "FDMM-seq=4-kl=1-z=8",
     "n_gpu": 1,
 
     "arch": {
@@ -9,10 +9,10 @@
             "avg_pool_global_var": true,
             "global_var_cond_infer": true,
             "input_dim": 80,
-            "z_dim": 4,
-            "emission_dim": 100,
-            "transition_dim": 200,
-            "rnn_dim": 600,
+            "z_dim": 8,
+            "emission_dim": 64,
+            "transition_dim": 64,
+            "rnn_dim": 128,
             "rnn_type": "lstm",
             "rnn_layers": 1,
             "rnn_bidirection": false,
@@ -28,14 +28,14 @@
     "data_loader_train": {
         "type": "MAPSynthDataLoader",
         "args":{
-            "batch_size": 20,
+            "batch_size": 32,
             "datasets_path": [
                 "data/A-MAPS_1.2-OrchestralHarp", 
                 "data/A-MAPS_1.2-Trumpet/", 
                 "data/A-MAPS_1.2-AcousticGrandPiano/", 
                 "data/A-MAPS_1.2-StringEnsemble1/"
             ],
-            "seq_len": 5,
+            "seq_len": 4,
             "shuffle": true,
             "num_workers": 1,
             "validation_split": 0.2
@@ -44,7 +44,7 @@
     "optimizer": {
         "type": "Adam",
         "args":{
-            "lr": 0.0008,
+            "lr": 0.001,
             "weight_decay": 0.0,
             "amsgrad": true,
             "betas": [0.9, 0.999]
@@ -63,11 +63,10 @@
         "early_stop": 500,
 
         "tensorboard": true,
-        "img_log_interval": 10,
+        "img_log_interval": 20,
 
-        "kl_weight": 0.01,
+        "kl_weight": 1,
         "min_anneal_factor": 0.0,
         "anneal_update": 1000
     }
 }
-

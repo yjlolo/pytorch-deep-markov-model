@@ -7,6 +7,18 @@ class BaseModel(nn.Module):
     """
     Base class for all models
     """
+    def encode_local(self, *inputs):
+        raise NotImplementedError
+
+    def encode_global(self, *inputs):
+        raise NotImplementedError
+    
+    def decode(self, *inputs):
+        raise NotImplementedError
+
+    def prior_transition(self, *inputs):
+        raise NotImplementedError
+
     @abstractmethod
     def forward(self, *inputs):
         """

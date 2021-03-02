@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import torch
 from torchvision.utils import make_grid
 from base import BaseTrainer
+from model.loss import post_process_output
+from data.preprocessor import SAMPLING_RATE
 from utils import inf_loop, MetricTracker
 
 
@@ -37,35 +39,32 @@ class Trainer(BaseTrainer):
 
         self.img_log_interval = config['trainer']['img_log_interval']
         self.recon_obj = config['trainer']['recon_obj']
-        self.seq_len = config['data_loader_train']['args']['seq_len']
         assert self.recon_obj in ['mse', 'nll']
-
-    def _post_process_output(self, output_seq):
-        if self.recon_obj == 'nll':
-                output_seq = torch.sigmoid(output_seq)
-        elif self.recon_obj == 'mse':
-            output_seq = torch.tanh(output_seq)
-        else:
-            msg = "Specify `recon_obj` with ['nll', 'mse']."
-            raise NotImplementedError(msg)
-        return output_seq
+        self.seq_len = int(
+            SAMPLING_RATE * config['data_loader_train']['args']['seq_len'])
+        )
 
     def _forward_step(self, batch, epoch, batch_idx, logger=None):
         x, x_reversed, x_mask, x_seq_lengths = batch
 
-        x = x.to(self.device)
-        x_reversed = x_reversed.to(self.device)
+        if self.model.reverse_input:
+            input = x_reversed
+        else:
+            input = x
+        if self.model.use_embedding:
+            input = self.model.embedding(input)
+
+        input = input.to(self.device)
         x_mask = x_mask.to(self.device)
         x_seq_lengths = x_seq_lengths.to(self.device)
 
-        # not all models need this, to be refractored
         kl_annealing_factor = determine_annealing_factor(
             self.config['trainer']['min_anneal_factor'],
             self.config['trainer']['anneal_update'],
             epoch - 1, self.len_epoch, batch_idx
         )
 
-        results = self.model(x, x_reversed, x_seq_lengths)
+        results = self.model(input, x_seq_lengths, x_mask)
         losses = self.model.loss_function(
             *results,
             kl_weight=self.config['trainer']['kl_weight'],
@@ -153,7 +152,7 @@ class Trainer(BaseTrainer):
 
         if epoch % self.img_log_interval == 0:
             fig = create_reconstruction_figure(
-                results[1], self._post_process_output(results[0])
+                results[1], post_process_output(results[0], self.recon_obj)[0]
             )
             self.writer.set_step(epoch, 'train')
             self.writer.add_figure('reconstruction', fig)
@@ -184,18 +183,22 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             for batch_idx, batch in enumerate(self.valid_data_loader):
 
-                results, loss, logger = self._forward_step(batch, epoch, batch_idx, logger)
+                results, loss, logger = self._forward_step(
+                    batch, epoch, batch_idx, logger
+                )
 
             if epoch % self.img_log_interval == 0:
                 n_sample = 3
                 output_seq, z_p_seq, mu_p_seq, logvar_p_seq = \
                     self.model.generate(n_sample, self.seq_len)
-                output_seq = self._post_process_output(output_seq)
+                output_seq = post_process_output(output_seq, self.recon_obj)[0]
                 plt.close()
                 fig, ax = plt.subplots(n_sample, 1, figsize=(10, n_sample * 10))
                 for i in range(n_sample):
-                    ax[i].imshow(output_seq[i].T.cpu().detach().numpy(), origin='lower')
-                self.writer.set_step(epoch, 'test')
+                    ax[i].imshow(
+                        output_seq[i].T.cpu().detach().numpy(), origin='lower'
+                    )
+                self.writer.set_step(epoch, 'valid')
                 self.writer.add_figure('generation', fig)
 
 
@@ -208,7 +211,9 @@ class Trainer(BaseTrainer):
         # ---------------------------------------------------
 
         if epoch % self.img_log_interval == 0:
-            fig = create_reconstruction_figure(results[1], results[0])
+            fig = create_reconstruction_figure(
+                results[1], post_process_output(results[0], self.recon_obj)[0]
+            )
             self.writer.set_step(epoch, 'valid')
             self.writer.add_figure('reconstruction', fig)
 
@@ -226,8 +231,8 @@ class Trainer(BaseTrainer):
 
             n_sample = 3
             output_seq, z_p_seq, mu_p_seq, logvar_p_seq = \
-                self.model.generate(n_sample, 100)
-            output_seq = self._post_process_output(output_seq)
+                self.model.generate(n_sample, self.seq_len)
+            output_seq = post_process_output(output_seq, self.recon_obj)
 
             plt.close()
             fig, ax = plt.subplots(n_sample, 1, figsize=(10, n_sample * 10))

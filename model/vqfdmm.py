@@ -2,7 +2,7 @@ import warnings
 import torch
 import torch.nn as nn
 from base import BaseModel
-from .loss import nll_loss, mse_loss, kl_div, kl_div_cat
+from .loss import nll_loss, mse_loss, kl_div, kl_div_cat, post_process_output
 from .metric import nll_metric, kl_div_metric
 from .modules import Emitter, Transition, Combiner, RnnEncoder, RnnGlobalEncoder
 from .fdmm import FactorDeepMarkovModel 
@@ -195,13 +195,7 @@ class VqFactorDeepMarkovModel(FactorDeepMarkovModel):
         mask = kwargs['mask']
         recon_obj = kwargs['recon_obj']
 
-        if recon_obj == 'nll':
-            recons = torch.sigmoid(recons)
-        elif recon_obj == 'mse':
-            recons = torch.tanh(recons)
-        else:
-            msg = "Specify `recon_obj` with ['nll', 'mse']."
-            raise NotImplementedError(msg)
+        recons = post_process_output(recons, recon_obj)
 
         neg_elbo = nll_metric(recons, inputs, mask) + \
             kl_div_metric([mu_q, logvar_q], mask, target=[mu_p, logvar_p]) + \

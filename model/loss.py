@@ -2,6 +2,21 @@ import torch
 import torch.nn as nn
 
 
+def post_process_output(output_seq, reconstruction_obj):
+    if reconstruction_obj == 'nll':
+        output_seq = torch.sigmoid(output_seq)
+        loss_f = nll_loss
+    elif reconstruction_obj == 'mse':
+        # Currently only supports value range [-1, 1];
+        # min-max normalisation has to be done accordingly
+        output_seq = torch.tanh(output_seq)
+        loss_f = mse_loss
+    else:
+        msg = "Specify `reconstruction_obj` with ['nll', 'mse']."
+        raise NotImplementedError(msg)
+    return output_seq, loss_f
+
+
 def kl_div(mu1, logvar1, mu2=None, logvar2=None):
     if mu2 is None:
         mu2 = torch.zeros_like(mu1)
