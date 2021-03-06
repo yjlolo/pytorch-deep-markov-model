@@ -71,7 +71,8 @@ class FactorDeepMarkovModel(DeepMarkovModel):
 
     def encode_local(self, input, z_prev, y):
         mu, logvar = self.combiner(
-            h_x=input[:, t, :], z_t_1=z_prev, y=y, self.rnn_bidirection
+            h_x=input, z_t_1=z_prev, y=y, 
+            rnn_bidirection=self.rnn_bidirection
         )
         z_t = self.reparameterization(mu, logvar)
         return mu, logvar, z_t
@@ -86,9 +87,16 @@ class FactorDeepMarkovModel(DeepMarkovModel):
         return x_t_recon
 
     def forward(self, x, x_reversed, x_seq_lengths, x_mask=None):
+        device = x.device
         T_max = x.size(1)
         batch_size = x.size(0)
 
+        if self.encoder.reverse_input:
+            input = x_reversed
+        else:
+            input = x
+        if self.use_embedding:
+            input = self.embedding(input)
         input = pack_padded_seq(input, x_seq_lengths)
 
         # Encode the global latent variable
@@ -104,13 +112,13 @@ class FactorDeepMarkovModel(DeepMarkovModel):
         z_prev = z_q_0
 
         # Create placeholders
-        x_recon = torch.zeros([batch_size, T_max, self.input_dim]).to(x.device)
-        mu_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
-        logvar_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
-        mu_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
-        logvar_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
-        z_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
-        z_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(x.device)
+        x_recon = torch.zeros([batch_size, T_max, self.input_dim]).to(device)
+        mu_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(device)
+        logvar_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(device)
+        mu_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(device)
+        logvar_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(device)
+        z_q_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(device)
+        z_p_seq = torch.zeros([batch_size, T_max, self.z_dim]).to(device)
 
         for t in range(T_max):
             # q(z_t | z_{t-1}, x_{t:T})

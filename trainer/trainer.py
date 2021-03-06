@@ -4,7 +4,7 @@ import torch
 from torchvision.utils import make_grid
 from base import BaseTrainer
 from model.loss import post_process_output
-from data.preprocessor import SAMPLING_RATE
+from data.preprocessor import SAMPLING_RATE, HOP
 from utils import inf_loop, MetricTracker
 
 
@@ -41,20 +41,14 @@ class Trainer(BaseTrainer):
         self.recon_obj = config['trainer']['recon_obj']
         assert self.recon_obj in ['mse', 'nll']
         self.seq_len = int(
-            SAMPLING_RATE * config['data_loader_train']['args']['seq_len'])
+            SAMPLING_RATE * config['data_loader_train']['args']['seq_len'] / HOP
         )
 
     def _forward_step(self, batch, epoch, batch_idx, logger=None):
         x, x_reversed, x_mask, x_seq_lengths = batch
 
-        if self.model.reverse_input:
-            input = x_reversed
-        else:
-            input = x
-        if self.model.use_embedding:
-            input = self.model.embedding(input)
-
-        input = input.to(self.device)
+        x = x.to(self.device)
+        x_reversed = x.to(self.device)
         x_mask = x_mask.to(self.device)
         x_seq_lengths = x_seq_lengths.to(self.device)
 
@@ -64,7 +58,7 @@ class Trainer(BaseTrainer):
             epoch - 1, self.len_epoch, batch_idx
         )
 
-        results = self.model(input, x_seq_lengths, x_mask)
+        results = self.model(x, x_reversed, x_seq_lengths, x_mask)
         losses = self.model.loss_function(
             *results,
             kl_weight=self.config['trainer']['kl_weight'],

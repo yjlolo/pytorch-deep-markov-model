@@ -1,18 +1,18 @@
 {
-    "name": "FDMM-seq=0.2-kl=0.01-z=16",
+    "name": "bFDMM-seq=0.2-kl=0.01-z=32",
     "n_gpu": 1,
 
     "arch": {
         "type": "FactorDeepMarkovModel",
         "args": {
-            "y_dim": 16,
+            "y_dim": 32,
             "avg_pool_global_var": true,
             "global_var_cond_infer": true,
             "input_dim": 80,
-            "z_dim": 16,
-            "emission_dim": 64,
-            "transition_dim": 64,
-            "rnn_dim": 128,
+            "z_dim": 32,
+            "emission_dim": 100,
+            "transition_dim": 200,
+            "rnn_dim": 600,
             "rnn_type": "lstm",
             "rnn_layers": 1,
             "rnn_bidirection": false,
@@ -51,22 +51,22 @@
         }
     },
     "trainer": {
-        "epochs": 3000,
+        "epochs": 5000,
         "overfit_single_batch": false,
 
         "save_dir": "saved/",
-        "save_period": 500,
+        "save_period": 1000,
         "verbosity": 2,
         
         "recon_obj": "mse",
         "monitor": "min val_loss",
-        "early_stop": 500,
+        "early_stop": 1000,
 
         "tensorboard": true,
-        "img_log_interval": 20,
+        "img_log_interval": 250,
 
         "kl_weight": 0.01,
         "min_anneal_factor": 0.0,
-        "anneal_update": 1000
+        "anneal_update": 2000
     }
 }
